@@ -19,8 +19,29 @@ const Login = () => {
     ExpiryDate: "",
     address: "",
     HodName: "",
-    logo: "",
+    logo: null, // Changed to null for file upload
+    navbarColor: "#ffffff", // Added with default white
+    sidebarColor: "#ffffff", // Added with default white
+    textColor: "#000000", // Changed from otherColor to textColor for clarity
   });
+
+  const data = {
+    AdminId : formData.AdminId,
+    PassKey : formData.PassKey,
+    name : formData.name,
+    Course : formData.Course,
+    Email : formData.Email,
+    mobileNumber : formData.mobileNumber,
+    whatsappNumber : formData.whatsappNumber,
+    StartDate : formData.StartDate,
+    ExpiryDate: formData.ExpiryDate,
+    address : formData.address,
+    HodName : formData.HodName,
+    logo : formData.HodName,
+    navbarColor : formData.navbarColor,
+    sidebarColor : formData.sidebarColor,
+    otherColor : formData.textColor,
+  }
 
   const [deleteData, setDeleteData] = useState({
     AdminId: "",
@@ -29,16 +50,16 @@ const Login = () => {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [adminList, setAdminList] = useState([]); // List of admins to display
+  const [adminList, setAdminList] = useState([]);
+  const [logoPreview, setLogoPreview] = useState(null); // For logo preview
   const router = useRouter();
 
   useEffect(() => {
     if (mode === "remove") {
       fetchAdminList();
     }
-  }, [mode]); // Re-fetch admin list when mode changes to remove
+  }, [mode]);
 
-  // Function to fetch admin list for removal
   const fetchAdminList = async () => {
     try {
       const res = await axios.get(
@@ -70,7 +91,6 @@ const Login = () => {
     );
   };
 
-  // Handle input field changes
   const handleChange = (e) => {
     const { name, value } = e.target;
     if (mode === "add") {
@@ -80,7 +100,24 @@ const Login = () => {
     }
   };
 
-  // Handle form submission
+  const handleColorChange = (name, value) => {
+    setFormData({ ...formData, [name]: value });
+  };
+
+  const handleLogoChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setFormData({ ...formData, logo: file });
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setLogoPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
@@ -88,9 +125,21 @@ const Login = () => {
 
     try {
       if (mode === "add") {
+        const formDataToSend = new FormData();
+        
+        // Append all fields to FormData
+        Object.keys(formData).forEach(key => {
+          if (key === 'logo' && formData[key]) {
+            formDataToSend.append('logo', formData[key]);
+          } else if (formData[key] !== null && formData[key] !== undefined) {
+            formDataToSend.append(key, formData[key]);
+          }
+        });
+
         await axios.post(
           `${process.env.NEXT_PUBLIC_API_BASE_URL}/newadmin/signup`,
-          formData
+          formData,
+          
         );
 
         // Send email to the new admin
@@ -101,12 +150,11 @@ const Login = () => {
           formData.StartDate,
           formData.ExpiryDate
         );
-
+        
+        window.location.reload();
         toast.success("Admin added successfully! Email has been sent 📧", {
           duration: 5000,
         });
-
-        window.location.reload();
       } else {
         const confirmed = window.confirm(
           `Are you sure you want to delete admin with ID: ${deleteData.AdminId}?`
@@ -128,7 +176,7 @@ const Login = () => {
         });
 
         setDeleteData({ AdminId: "", reason: "" });
-        fetchAdminList(); // Refetch the admin list
+        fetchAdminList();
       }
     } catch (err) {
       toast.error(err.response?.data?.message || "Something went wrong.", {
@@ -233,12 +281,97 @@ const Login = () => {
                     id={field.name}
                     value={formData[field.name]}
                     onChange={handleChange}
-                    required
+                    required={field.type !== 'color'}
                     className="appearance-none rounded-md block w-full px-3 py-2 border border-gray-300 text-gray-900 focus:outline-none focus:ring focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder={field.label}
                   />
                 </div>
               ))}
+
+              {/* Logo Upload */}
+              <div>
+                <label className="block text-sm font-semibold text-[#53ADD3] mb-2">
+                  Logo
+                </label>
+                <div className="flex items-center space-x-4">
+                  <label className="flex flex-col items-center justify-center w-full p-2 border-2 border-dashed rounded-lg cursor-pointer border-gray-300 hover:border-blue-500">
+                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                      <svg className="w-8 h-8 mb-4 text-gray-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
+                        <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/>
+                      </svg>
+                      <p className="mb-2 text-sm text-gray-500">
+                        <span className="font-semibold">Click to upload</span> or drag and drop
+                      </p>
+                      <p className="text-xs text-gray-500">PNG, JPG, JPEG (MAX. 5MB)</p>
+                    </div>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleLogoChange} 
+                      className="hidden" 
+                    />
+                  </label>
+                  {logoPreview && (
+                    <div className="w-16 h-16 border rounded-md overflow-hidden">
+                      <img src={logoPreview} alt="Logo preview" className="w-full h-full object-contain" />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Navbar Color Picker */}
+              <div>
+                <label htmlFor="navbarColor" className="block text-sm font-semibold text-[#53ADD3] mb-2">
+                  Navbar Color
+                </label>
+                <div className="flex items-center space-x-4">
+                  <input
+                    type="color"
+                    name="navbarColor"
+                    id="navbarColor"
+                    value={formData.navbarColor}
+                    onChange={(e) => handleColorChange('navbarColor', e.target.value)}
+                    className="w-12 h-12 rounded-md cursor-pointer"
+                  />
+                  <span>{formData.navbarColor}</span>
+                </div>
+              </div>
+
+              {/* Sidebar Color Picker */}
+              <div>
+                <label htmlFor="sidebarColor" className="block text-sm font-semibold text-[#53ADD3] mb-2">
+                  Sidebar Color
+                </label>
+                <div className="flex items-center space-x-4">
+                  <input
+                    type="color"
+                    name="sidebarColor"
+                    id="sidebarColor"
+                    value={formData.sidebarColor}
+                    onChange={(e) => handleColorChange('sidebarColor', e.target.value)}
+                    className="w-12 h-12 rounded-md cursor-pointer"
+                  />
+                  <span>{formData.sidebarColor}</span>
+                </div>
+              </div>
+
+              {/* Text Color Picker */}
+              <div>
+                <label htmlFor="textColor" className="block text-sm font-semibold text-[#53ADD3] mb-2">
+                  Text Color
+                </label>
+                <div className="flex items-center space-x-4">
+                  <input
+                    type="color"
+                    name="textColor"
+                    id="textColor"
+                    value={formData.textColor}
+                    onChange={(e) => handleColorChange('textColor', e.target.value)}
+                    className="w-12 h-12 rounded-md cursor-pointer"
+                  />
+                  <span>{formData.textColor}</span>
+                </div>
+              </div>
             </>
           ) : (
             <>
