@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import axios from "axios";
 
 const Page = () => {
   const [pdfForm, setPdfForm] = useState({
@@ -30,15 +31,19 @@ const Page = () => {
 
   // Create PDF and set ID
   const handleCreatePdf = async () => {
-    // Simulated API call for demo - replace with actual axios implementation
     try {
-      const mockPdfId = Math.random().toString(36).substr(2, 9);
-      setPdfId(mockPdfId);
-      setQuestionForm((prev) => ({ ...prev, pdfId: mockPdfId }));
-      alert("PDF Created. PDF ID: " + mockPdfId);
+      const { data } = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/pdfid`, {
+        chapterName: pdfForm.chapterName,
+        subject: pdfForm.subject,
+        topicTags: pdfForm.topicTags.split(",").map(tag => tag.trim()),
+      });
+
+      setPdfId(data.pdfId);
+      setQuestionForm((prev) => ({ ...prev, pdfId: data.pdfId }));
+      alert("PDF Created. PDF ID: " + data.pdfId);
     } catch (error) {
       console.error("PDF creation failed:", error);
-      alert("Error creating PDF");
+      alert(error.response?.data?.message || "Error creating PDF");
     }
   };
 
@@ -47,14 +52,17 @@ const Page = () => {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Simulated upload for demo - replace with actual axios implementation
+    const formData = new FormData();
+    formData.append("file", file);
+
     try {
       setUploading(true);
-      // Simulate upload delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      const mockImageUrl = URL.createObjectURL(file);
-      setQuestionForm((prev) => ({ ...prev, diagramPath: mockImageUrl }));
+      const res = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/upload`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      const imageUrl = res.data.url;
+      setQuestionForm((prev) => ({ ...prev, diagramPath: imageUrl }));
     } catch (err) {
       console.error("Image upload failed:", err);
       alert("Failed to upload image");
@@ -71,18 +79,25 @@ const Page = () => {
 
     try {
       setEvaluating(true);
-      // Simulate API call for demo - replace with actual axios implementation
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      const difficulties = ["simple", "medium", "hard"];
-      const randomDifficulty = difficulties[Math.floor(Math.random() * difficulties.length)];
+      const res = await axios.post(`http://localhost:5000/api/assess-difficulty`, {
+        mcq: mcqText,
+      });
 
-      setQuestionForm((prev) => ({
-        ...prev,
-        difficulty_level: randomDifficulty,
-      }));
-      
-      alert(`Difficulty evaluated as: ${randomDifficulty}`);
+      const difficulty = res.data.difficulty?.toLowerCase() || "medium";
+
+// Map Gemini difficulty to backend-accepted format
+const mappedDifficulty =
+  difficulty === "easy" ? "simple" : difficulty;
+
+if (["simple", "medium", "hard"].includes(mappedDifficulty)) {
+  setQuestionForm((prev) => ({
+    ...prev,
+    difficulty_level: mappedDifficulty,
+  }));
+} else {
+  alert("Unexpected difficulty level returned: " + difficulty);
+}
+
     } catch (error) {
       console.error("Difficulty evaluation failed:", error);
       alert("Failed to evaluate difficulty.");
@@ -94,245 +109,163 @@ const Page = () => {
   // Submit full question
   const handleCreateQuestion = async () => {
     try {
-      // Simulated API call for demo - replace with actual axios implementation
-      const mockQuestionId = Math.random().toString(36).substr(2, 9);
-      alert("Question created successfully. ID: " + mockQuestionId);
+      const { data } = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/chatper-wise-question`,
+        questionForm
+      );
+      alert("Question created successfully. ID: " + data.questionId);
     } catch (error) {
       console.error("Question creation failed:", error);
-      alert("Error creating question");
+      alert(error.response?.data?.message || "Error creating question");
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 py-8">
-      <div className="max-w-4xl mx-auto px-6">
-        {/* Header */}
-        <div className="text-center mb-10">
-          <div className="inline-block p-1 rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 mb-4">
-            <div className="bg-white rounded-xl px-8 py-4">
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                Chapter-wise Question Entry
-              </h1>
-            </div>
+    <div className="p-6 max-w-3xl mx-auto space-y-6">
+      <h1 className="text-xl font-bold">Chapter-wise Question Entry</h1>
+
+      {/* PDF Form */}
+      <div className="border p-4 rounded shadow">
+        <h2 className="text-lg font-semibold">Step 1: Create PDF Entry</h2>
+        <input
+          placeholder="Chapter Name"
+          className="block border p-2 my-2 w-full"
+          value={pdfForm.chapterName}
+          onChange={(e) => setPdfForm({ ...pdfForm, chapterName: e.target.value })}
+        />
+        <input
+          placeholder="Subject"
+          className="block border p-2 my-2 w-full"
+          value={pdfForm.subject}
+          onChange={(e) => setPdfForm({ ...pdfForm, subject: e.target.value })}
+        />
+        <input
+          placeholder="Topic Tags (comma-separated)"
+          className="block border p-2 my-2 w-full"
+          value={pdfForm.topicTags}
+          onChange={(e) => setPdfForm({ ...pdfForm, topicTags: e.target.value })}
+        />
+        <button
+          onClick={handleCreatePdf}
+          className="bg-blue-500 text-white px-4 py-2 rounded"
+        >
+          Get PDF ID
+        </button>
+      </div>
+
+      {/* Question Form */}
+      <div className="border p-4 rounded shadow">
+        <h2 className="text-lg font-semibold">Step 2: Create Question</h2>
+
+        <input
+          placeholder="PDF ID"
+          className="block border p-2 my-2 w-full"
+          value={questionForm.pdfId}
+          onChange={(e) =>
+            setQuestionForm({ ...questionForm, pdfId: e.target.value })
+          }
+        />
+        
+        <textarea
+          placeholder="Question Text"
+          className="block border p-2 my-2 w-full"
+          value={questionForm.question}
+          onChange={(e) =>
+            setQuestionForm({ ...questionForm, question: e.target.value })
+          }
+        />
+
+        <h3 className="font-semibold mt-4">Options:</h3>
+        {questionForm.options.map((opt, idx) => (
+          <div key={idx} className="flex items-center gap-2 my-1">
+            <input
+              placeholder={`Option ${idx + 1}`}
+              className="flex-1 border p-2"
+              value={opt.option_text}
+              onChange={(e) => {
+                const updated = [...questionForm.options];
+                updated[idx].option_text = e.target.value;
+                setQuestionForm({ ...questionForm, options: updated });
+              }}
+            />
+            <label className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={opt.is_correct}
+                onChange={(e) => {
+                  const updated = [...questionForm.options];
+                  updated[idx].is_correct = e.target.checked;
+                  setQuestionForm({ ...questionForm, options: updated });
+                }}
+              />
+              Correct
+            </label>
           </div>
-          <p className="text-gray-600 text-lg">Create and manage educational content with ease</p>
-        </div>
+        ))}
 
-        <div className="space-y-8">
-          {/* PDF Form */}
-          <div className="bg-gradient-to-br from-blue-50 to-indigo-100 p-1 rounded-2xl shadow-xl">
-            <div className="bg-white rounded-xl p-8">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg">
-                  1
-                </div>
-                <h2 className="text-2xl font-bold text-gray-800">Create PDF Entry</h2>
-              </div>
-              
-              <div className="grid gap-6">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Chapter Name</label>
-                  <input
-                    placeholder="Enter chapter name"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white"
-                    value={pdfForm.chapterName}
-                    onChange={(e) => setPdfForm({ ...pdfForm, chapterName: e.target.value })}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Subject</label>
-                  <input
-                    placeholder="Enter subject"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white"
-                    value={pdfForm.subject}
-                    onChange={(e) => setPdfForm({ ...pdfForm, subject: e.target.value })}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Topic Tags</label>
-                  <input
-                    placeholder="Enter topic tags (comma-separated)"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white"
-                    value={pdfForm.topicTags}
-                    onChange={(e) => setPdfForm({ ...pdfForm, topicTags: e.target.value })}
-                  />
-                </div>
-                
-                <button
-                  onClick={handleCreatePdf}
-                  className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-semibold px-8 py-3 rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
-                >
-                  Get PDF ID
-                </button>
-              </div>
-            </div>
+        <button
+          onClick={handleEvaluateDifficulty}
+          className="bg-purple-600 text-white px-4 py-2 rounded mt-2"
+        >
+          {evaluating ? "Evaluating..." : "Evaluate Difficulty"}
+        </button>
+
+        <select
+          value={questionForm.difficulty_level}
+          onChange={(e) =>
+            setQuestionForm({ ...questionForm, difficulty_level: e.target.value })
+          }
+          className="block border p-2 my-2 w-full"
+        >
+          <option value="simple">Simple</option>
+          <option value="medium">Medium</option>
+          <option value="hard">Hard</option>
+        </select>
+
+        <textarea
+          placeholder="Solution"
+          className="block border p-2 my-2 w-full"
+          value={questionForm.solution}
+          onChange={(e) =>
+            setQuestionForm({ ...questionForm, solution: e.target.value })
+          }
+        />
+
+        <h3 className="font-semibold mt-4">Upload Diagram:</h3>
+        <input
+          type="file"
+          accept="image/*"
+          className="block my-2"
+          onChange={handleImageUpload}
+        />
+        {uploading && <p className="text-sm text-gray-500">Uploading image...</p>}
+
+        <input
+          placeholder="Diagram URL"
+          className="block border p-2 my-2 w-full"
+          value={questionForm.diagramPath}
+          onChange={(e) =>
+            setQuestionForm({ ...questionForm, diagramPath: e.target.value })
+          }
+        />
+
+        {questionForm.diagramPath && (
+          <div className="mt-2">
+            <img
+              src={questionForm.diagramPath}
+              alt="Uploaded diagram"
+              className="max-w-xs border rounded"
+            />
+            <p className="text-xs break-all text-gray-600 mt-1">{questionForm.diagramPath}</p>
           </div>
+        )}
 
-          {/* Question Form */}
-          <div className="bg-gradient-to-br from-purple-50 to-pink-100 p-1 rounded-2xl shadow-xl">
-            <div className="bg-white rounded-xl p-8">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-pink-600 flex items-center justify-center text-white font-bold text-lg">
-                  2
-                </div>
-                <h2 className="text-2xl font-bold text-gray-800">Create Question</h2>
-              </div>
-
-              <div className="grid gap-6">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">PDF ID</label>
-                  <input
-                    placeholder="Enter PDF ID"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white"
-                    value={questionForm.pdfId}
-                    onChange={(e) =>
-                      setQuestionForm({ ...questionForm, pdfId: e.target.value })
-                    }
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Question Text</label>
-                  <textarea
-                    placeholder="Enter your question here..."
-                    rows={4}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white resize-none"
-                    value={questionForm.question}
-                    onChange={(e) =>
-                      setQuestionForm({ ...questionForm, question: e.target.value })
-                    }
-                  />
-                </div>
-
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-gradient-to-r from-green-400 to-blue-500"></div>
-                    Answer Options
-                  </h3>
-                  {questionForm.options.map((opt, idx) => (
-                    <div key={idx} className="bg-gradient-to-r from-gray-50 to-gray-100 p-4 rounded-xl border border-gray-200">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-r from-gray-400 to-gray-500 flex items-center justify-center text-white font-medium text-sm">
-                          {String.fromCharCode(65 + idx)}
-                        </div>
-                        <input
-                          placeholder={`Option ${idx + 1}`}
-                          className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all duration-200"
-                          value={opt.option_text}
-                          onChange={(e) => {
-                            const updated = [...questionForm.options];
-                            updated[idx].option_text = e.target.value;
-                            setQuestionForm({ ...questionForm, options: updated });
-                          }}
-                        />
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={opt.is_correct}
-                            onChange={(e) => {
-                              const updated = [...questionForm.options];
-                              updated[idx].is_correct = e.target.checked;
-                              setQuestionForm({ ...questionForm, options: updated });
-                            }}
-                            className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
-                          />
-                          <span className="text-sm font-medium text-gray-700">Correct</span>
-                        </label>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex gap-4">
-                  <button
-                    onClick={handleEvaluateDifficulty}
-                    disabled={evaluating}
-                    className="bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold px-6 py-3 rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 disabled:transform-none disabled:shadow-md"
-                  >
-                    {evaluating ? "Evaluating..." : "✨ Evaluate Difficulty"}
-                  </button>
-                  
-                  <select
-                    value={questionForm.difficulty_level}
-                    onChange={(e) =>
-                      setQuestionForm({ ...questionForm, difficulty_level: e.target.value })
-                    }
-                    className="px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white"
-                  >
-                    <option value="simple">🟢 Simple</option>
-                    <option value="medium">🟡 Medium</option>
-                    <option value="hard">🔴 Hard</option>
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Solution</label>
-                  <textarea
-                    placeholder="Provide detailed solution..."
-                    rows={4}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white resize-none"
-                    value={questionForm.solution}
-                    onChange={(e) =>
-                      setQuestionForm({ ...questionForm, solution: e.target.value })
-                    }
-                  />
-                </div>
-
-                <div className="bg-gradient-to-r from-yellow-50 to-orange-100 p-6 rounded-xl border border-yellow-200">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-gradient-to-r from-yellow-400 to-orange-500"></div>
-                    Upload Diagram
-                  </h3>
-                  
-                  <div className="space-y-4">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      className="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-6 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gradient-to-r file:from-orange-400 file:to-pink-500 file:text-white hover:file:from-orange-500 hover:file:to-pink-600 file:cursor-pointer file:transition-all file:duration-200"
-                    />
-                    
-                    {uploading && (
-                      <div className="flex items-center gap-2 text-orange-600">
-                        <div className="w-4 h-4 border-2 border-orange-600 border-t-transparent rounded-full animate-spin"></div>
-                        <span className="text-sm">Uploading image...</span>
-                      </div>
-                    )}
-
-                    <input
-                      placeholder="Or paste diagram URL here..."
-                      className="w-full px-4 py-3 border border-orange-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent transition-all duration-200 bg-white"
-                      value={questionForm.diagramPath}
-                      onChange={(e) =>
-                        setQuestionForm({ ...questionForm, diagramPath: e.target.value })
-                      }
-                    />
-
-                    {questionForm.diagramPath && (
-                      <div className="bg-white p-4 rounded-xl border border-orange-200">
-                        <img
-                          src={questionForm.diagramPath}
-                          alt="Uploaded diagram"
-                          className="max-w-sm rounded-lg shadow-md border border-gray-200"
-                        />
-                        <p className="text-xs text-gray-500 mt-2 break-all bg-gray-50 p-2 rounded">{questionForm.diagramPath}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <button
-                  onClick={handleCreateQuestion}
-                  className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 text-lg"
-                >
-                  🚀 Submit Question
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <button
+          onClick={handleCreateQuestion}
+          className="bg-green-600 text-white px-4 py-2 rounded mt-4"
+        >
+          Submit Question
+        </button>
       </div>
     </div>
   );
