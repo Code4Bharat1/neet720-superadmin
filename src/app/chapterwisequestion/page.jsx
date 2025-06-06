@@ -9,7 +9,10 @@ const Page = () => {
     subject: "",
     topicTags: "",
   });
+
   const [pdfId, setPdfId] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [evaluating, setEvaluating] = useState(false);
 
   const [questionForm, setQuestionForm] = useState({
     pdfId: "",
@@ -26,10 +29,6 @@ const Page = () => {
     diagramPath: "",
   });
 
-  const [uploading, setUploading] = useState(false);
-  const [evaluating, setEvaluating] = useState(false);
-
-  // Create PDF and set ID
   const handleCreatePdf = async () => {
     try {
       const { data } = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/pdfid`, {
@@ -47,7 +46,6 @@ const Page = () => {
     }
   };
 
-  // Upload Diagram Image
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -71,11 +69,16 @@ const Page = () => {
     }
   };
 
-  // Evaluate Difficulty
+  const handleRemoveImage = () => {
+    setQuestionForm((prev) => ({ ...prev, diagramPath: "" }));
+  };
+
   const handleEvaluateDifficulty = async () => {
-    const mcqText = `${questionForm.question}\n` + questionForm.options
-      .map((opt, i) => `${String.fromCharCode(65 + i)}. ${opt.option_text}`)
-      .join("\n");
+    const mcqText =
+      `${questionForm.question}\n` +
+      questionForm.options
+        .map((opt, i) => `${String.fromCharCode(65 + i)}. ${opt.option_text}`)
+        .join("\n");
 
     try {
       setEvaluating(true);
@@ -83,21 +86,23 @@ const Page = () => {
         mcq: mcqText,
       });
 
-      const difficulty = res.data.difficulty?.toLowerCase() || "medium";
+      const { difficulty, answer, explanation } = res.data;
 
-// Map Gemini difficulty to backend-accepted format
-const mappedDifficulty =
-  difficulty === "easy" ? "simple" : difficulty;
+      const mappedDifficulty = difficulty === "easy" ? "simple" : difficulty;
 
-if (["simple", "medium", "hard"].includes(mappedDifficulty)) {
-  setQuestionForm((prev) => ({
-    ...prev,
-    difficulty_level: mappedDifficulty,
-  }));
-} else {
-  alert("Unexpected difficulty level returned: " + difficulty);
-}
+      setQuestionForm((prev) => {
+        const updatedOptions = prev.options.map((opt, idx) => ({
+          ...opt,
+          is_correct: String.fromCharCode(65 + idx) === answer.toUpperCase(),
+        }));
 
+        return {
+          ...prev,
+          difficulty_level: mappedDifficulty,
+          options: updatedOptions,
+          solution: explanation,
+        };
+      });
     } catch (error) {
       console.error("Difficulty evaluation failed:", error);
       alert("Failed to evaluate difficulty.");
@@ -106,7 +111,6 @@ if (["simple", "medium", "hard"].includes(mappedDifficulty)) {
     }
   };
 
-  // Submit full question
   const handleCreateQuestion = async () => {
     try {
       const { data } = await axios.post(
@@ -165,7 +169,7 @@ if (["simple", "medium", "hard"].includes(mappedDifficulty)) {
             setQuestionForm({ ...questionForm, pdfId: e.target.value })
           }
         />
-        
+
         <textarea
           placeholder="Question Text"
           className="block border p-2 my-2 w-full"
@@ -250,13 +254,22 @@ if (["simple", "medium", "hard"].includes(mappedDifficulty)) {
         />
 
         {questionForm.diagramPath && (
-          <div className="mt-2">
+          <div className="mt-2 relative w-fit">
             <img
               src={questionForm.diagramPath}
               alt="Uploaded diagram"
               className="max-w-xs border rounded"
             />
-            <p className="text-xs break-all text-gray-600 mt-1">{questionForm.diagramPath}</p>
+            <button
+              onClick={handleRemoveImage}
+              className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center hover:bg-red-600"
+              title="Remove image"
+            >
+              ✕
+            </button>
+            <p className="text-xs break-all text-gray-600 mt-1">
+              {questionForm.diagramPath}
+            </p>
           </div>
         )}
 
