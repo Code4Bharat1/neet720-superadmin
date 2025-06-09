@@ -16,7 +16,7 @@ const Page = () => {
 
   const [questionForm, setQuestionForm] = useState({
     pdfId: "",
-    topicId: "",
+    topicId: "", // 💡 Auto-detected topic name
     question: "",
     difficulty_level: "medium",
     options: [
@@ -84,10 +84,10 @@ const Page = () => {
       setEvaluating(true);
       const res = await axios.post(`http://localhost:5000/api/assess-difficulty`, {
         mcq: mcqText,
+        chapter: pdfForm.chapterName, // ✅ send chapter name
       });
 
-      const { difficulty, answer, explanation } = res.data;
-
+      const { difficulty, answer, explanation, topic } = res.data;
       const mappedDifficulty = difficulty === "easy" ? "simple" : difficulty;
 
       setQuestionForm((prev) => {
@@ -101,6 +101,7 @@ const Page = () => {
           difficulty_level: mappedDifficulty,
           options: updatedOptions,
           solution: explanation,
+          topicId: topic || "", // ✅ save auto-detected topic
         };
       });
     } catch (error) {
@@ -233,6 +234,14 @@ const Page = () => {
           onChange={(e) =>
             setQuestionForm({ ...questionForm, solution: e.target.value })
           }
+        />
+
+        {/* ✅ Topic display */}
+        <input
+          placeholder="Topic (auto-detected)"
+          className="block border p-2 my-2 w-full bg-gray-100"
+          value={questionForm.topicId}
+          readOnly
         />
 
         <h3 className="font-semibold mt-4">Upload Diagram:</h3>

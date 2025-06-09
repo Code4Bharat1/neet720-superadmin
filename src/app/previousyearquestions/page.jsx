@@ -67,8 +67,7 @@ const handleEvaluateAnswer = async () => {
       mcq: mcqText,
     });
 
-    const { answer, explanation } = res.data;
-
+    const { answer, explanation, subject, difficulty } = res.data;
     const answerIndex = "ABCD".indexOf(answer.toUpperCase());
 
     if (answerIndex === -1 || !form.options[answerIndex]) {
@@ -80,7 +79,8 @@ const handleEvaluateAnswer = async () => {
 
     setForm((prev) => ({
       ...prev,
-      correctAnswer: fullAnswerText, // store full answer
+      subject: subject || prev.subject,
+      correctAnswer: fullAnswerText,
       solution: explanation,
     }));
   } catch (error) {
@@ -90,6 +90,7 @@ const handleEvaluateAnswer = async () => {
     setEvaluating(false);
   }
 };
+
 
 
   const handleSubmit = async () => {
