@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import axios from "axios";
 
 // Updated parser for multiple MCQs, even with bold/numbering!
@@ -52,7 +52,7 @@ function parseMcqs(markdown) {
       submitting: false,
       evaluated: false,
       pdfId: "",
-      topicId: "",
+      topic: "",
       diagramPath: "",
     };
   });
@@ -60,11 +60,27 @@ function parseMcqs(markdown) {
 
 const Page = () => {
   // MCQ extraction
+  const pasteBoxRef = useRef(null);
   const [mcqImage, setMcqImage] = useState(null);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState(null);
   const [extractedQuestions, setExtractedQuestions] = useState([]);
   const [pdfId, setPdfId] = useState("");
+
+  const handlePasteImage = (e) => {
+    // Check clipboard items for image
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf("image") !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          setMcqImage(file);
+          setExtractError(null);
+          break;
+        }
+      }
+    }
+  };
 
   // Handle image change and extraction
   const handleMcqImageChange = (e) => {
@@ -149,17 +165,17 @@ const Page = () => {
         "http://localhost:5000/api/assess-difficulty",
         {
           mcq: mcqText,
-          chapter: "", // supply chapter if you want
+          chapter: "",
         }
       );
-      const { difficulty, answer, explanation, topic } = res.data;
+      const { difficulty, answer, explanation, topic, topic_id } = res.data;
       const mappedDifficulty =
         difficulty === "easy" ? "simple" : difficulty;
       setExtractedQuestions((prev) => {
         const arr = [...prev];
         arr[idx].difficulty_level = mappedDifficulty;
         arr[idx].solution = explanation;
-        arr[idx].topicId = topic || "";
+        arr[idx].topic = topic || "";
         arr[idx].options = arr[idx].options.map((opt, i) => ({
           ...opt,
           is_correct:
@@ -169,6 +185,10 @@ const Page = () => {
         arr[idx].evaluating = false;
         return arr;
       });
+
+      // SET PDF ID AUTOMATICALLY TO TOPIC_ID
+      if (topic_id) setPdfId(topic_id.toString());
+
     } catch (error) {
       setExtractedQuestions((prev) => {
         const arr = [...prev];
@@ -214,6 +234,20 @@ const Page = () => {
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
+      <div
+        ref={pasteBoxRef}
+        tabIndex={0}
+        onPaste={handlePasteImage}
+        className="border-2 border-dashed border-blue-400 rounded p-6 text-center mb-4 cursor-pointer hover:bg-blue-50 focus:bg-blue-50"
+        style={{ minHeight: "80px" }}
+        onClick={() => pasteBoxRef.current && pasteBoxRef.current.focus()}
+      >
+        <span className="text-gray-700">
+          <b>Paste</b> your image snippet here (Ctrl+V or ⌘+V)<br />
+          or click to focus and paste
+        </span>
+      </div>
+
       <h1 className="text-xl font-bold mb-4">Extract & Submit MCQs</h1>
       <div className="border p-4 rounded shadow mb-4">
         <h2 className="text-lg font-semibold">Step 1: Upload MCQ Image</h2>
@@ -242,7 +276,7 @@ const Page = () => {
           </div>
         )}
         <input
-          placeholder="PDF ID (optional)"
+          placeholder="PDF ID (auto-filled after evaluation)"
           className="block border p-2 my-2 w-full max-w-xs"
           value={pdfId}
           onChange={(e) => setPdfId(e.target.value)}
@@ -300,6 +334,12 @@ const Page = () => {
                   ? "Evaluated"
                   : "Evaluate"}
               </button>
+              {q.topic && (
+                <div className="my-2">
+                  <span className="font-semibold text-gray-700">Topic:&nbsp;</span>
+                  <span className="text-blue-600">{q.topic}</span>
+                </div>
+              )}
               <textarea
                 className="block border p-2 my-2 w-full"
                 placeholder="Solution"
