@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import axios from "axios";
 
 // Updated parser for multiple MCQs, even with bold/numbering!
@@ -59,6 +59,36 @@ function parseMcqs(markdown) {
 }
 
 const Page = () => {
+  // Chapter and Topics logic with localStorage
+  const [chapter, setChapter] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("mcq_chapter") || "";
+    }
+    return "";
+  });
+  const [topics, setTopics] = useState(() => {
+    if (typeof window !== "undefined") {
+      const t = localStorage.getItem("mcq_topics");
+      return t ? JSON.parse(t) : [];
+    }
+    return [];
+  });
+  const [showEdit, setShowEdit] = useState(() => {
+    if (typeof window !== "undefined") {
+      return !(localStorage.getItem("mcq_chapter") && localStorage.getItem("mcq_topics"));
+    }
+    return true;
+  });
+  const [topicInput, setTopicInput] = useState(() => {
+    if (typeof window !== "undefined") {
+      const t = localStorage.getItem("mcq_topics");
+      if (t) {
+        return JSON.parse(t).join("\n");
+      }
+    }
+    return "";
+  });
+
   // MCQ extraction
   const pasteBoxRef = useRef(null);
   const [mcqImage, setMcqImage] = useState(null);
@@ -67,8 +97,13 @@ const Page = () => {
   const [extractedQuestions, setExtractedQuestions] = useState([]);
   const [pdfId, setPdfId] = useState("");
 
+  // Set topicInput if topics change externally
+  useEffect(() => {
+    if (topics.length > 0) setTopicInput(topics.join("\n"));
+  }, [topics]);
+
+  // Handle paste for images
   const handlePasteImage = (e) => {
-    // Check clipboard items for image
     const items = e.clipboardData.items;
     for (let i = 0; i < items.length; i++) {
       if (items[i].type.indexOf("image") !== -1) {
@@ -144,6 +179,13 @@ const Page = () => {
 
   // Evaluate
   const handleEvaluateDifficulty = async (idx) => {
+    // Block if chapter/topics not set
+    if (!chapter || topics.length === 0) {
+      alert("Please set chapter name and topics first.");
+      setShowEdit(true);
+      return;
+    }
+
     setExtractedQuestions((prev) => {
       const arr = [...prev];
       arr[idx].evaluating = true;
@@ -165,7 +207,8 @@ const Page = () => {
         "http://localhost:5000/api/assess-difficulty",
         {
           mcq: mcqText,
-          chapter: "",
+          chapter: chapter,
+          topics: topics,
         }
       );
       const { difficulty, answer, explanation, topic, topic_id } = res.data;
@@ -234,6 +277,72 @@ const Page = () => {
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
+      {/* Chapter/Topics section */}
+      <div className="border p-4 rounded shadow mb-4 bg-gray-50">
+        {showEdit ? (
+          <div>
+            <h2 className="font-semibold mb-2">Set Chapter and Topics</h2>
+            <input
+              className="border p-2 w-full my-2"
+              placeholder="Chapter Name"
+              value={chapter}
+              onChange={(e) => setChapter(e.target.value)}
+            />
+            <textarea
+              className="border p-2 w-full my-2"
+              placeholder="Enter topics, one per line"
+              value={topicInput}
+              onChange={(e) => setTopicInput(e.target.value)}
+              rows={4}
+            />
+            <button
+              className="bg-blue-600 text-white px-4 py-2 rounded"
+              onClick={() => {
+                const topicsArr = topicInput
+                  .split("\n")
+                  .map((t) => t.trim())
+                  .filter(Boolean);
+                setTopics(topicsArr);
+                setShowEdit(false);
+                localStorage.setItem("mcq_chapter", chapter);
+                localStorage.setItem("mcq_topics", JSON.stringify(topicsArr));
+              }}
+              disabled={!chapter || !topicInput.trim()}
+            >
+              Save
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div>
+                <span className="font-semibold">Chapter:</span> {chapter}
+              </div>
+              <div>
+                <span className="font-semibold">Topics:</span>{" "}
+                {topics.map((t) => (
+                  <span
+                    key={t}
+                    className="inline-block bg-blue-200 text-blue-800 px-2 py-1 m-1 rounded text-sm"
+                  >
+                    {t}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <button
+              className="bg-gray-600 text-white px-3 py-2 rounded"
+              onClick={() => {
+                setShowEdit(true);
+                setTopicInput(topics.join("\n"));
+              }}
+            >
+              Edit Chapter/Topics
+            </button>
+          </div>
+        )}
+      </div>
+
       <div
         ref={pasteBoxRef}
         tabIndex={0}
