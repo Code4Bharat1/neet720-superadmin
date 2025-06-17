@@ -24,6 +24,8 @@ function formatMcqJsonForUI(mcq) {
 }
 
 const Page = () => {
+
+  
   // Chapter/Topics state with localStorage
   const [chapter, setChapter] = useState(() => {
     if (typeof window !== "undefined") {
@@ -59,6 +61,13 @@ const Page = () => {
   const [extractError, setExtractError] = useState(null);
   const [extractedQuestions, setExtractedQuestions] = useState([]);
   const [pdfId, setPdfId] = useState("");
+  const [submittedCount, setSubmittedCount] = useState(() => {
+  if (typeof window !== "undefined") {
+    return parseInt(localStorage.getItem("mcq_submitted_count") || "0", 10);
+  }
+  return 0;
+});
+
 
   useEffect(() => {
     if (topics.length > 0) setTopicInput(topics.join("\n"));
@@ -220,6 +229,10 @@ const Page = () => {
         `${process.env.NEXT_PUBLIC_API_BASE_URL}/chatper-wise-question`,
         q
       );
+      const currentCount = parseInt(localStorage.getItem("mcq_submitted_count") || "0", 10);
+      localStorage.setItem("mcq_submitted_count", (currentCount + 1).toString());
+      setSubmittedCount(currentCount + 1);
+
       setExtractedQuestions((prev) => {
         const arr = [...prev];
         arr[idx].submitting = false;
@@ -239,6 +252,20 @@ const Page = () => {
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
+      <div className="text-xl font-semibold text-green-700 mb-4">
+  Total Questions Submitted: {submittedCount}
+</div>
+<button
+  onClick={() => {
+    localStorage.setItem("mcq_submitted_count", "0");
+    setSubmittedCount(0);
+  }}
+  className="ml-4 text-sm text-red-600 underline"
+>
+  Reset Count
+</button>
+
+
       {/* Chapter/Topics section */}
       <div className="border p-4 rounded shadow mb-4 bg-gray-50">
         {showEdit ? (
@@ -419,7 +446,7 @@ const Page = () => {
                 onChange={(e) =>
                   updateQuestionField(idx, "solution", e.target.value)
                 }
-              />
+              />  
               <button
                 className={`bg-green-600 text-white px-4 py-2 rounded mt-2 ${
                   q.submitting ? "opacity-50" : ""
