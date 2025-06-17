@@ -3,63 +3,28 @@
 import React, { useState, useRef, useEffect } from "react";
 import axios from "axios";
 
-// Updated parser for multiple MCQs, even with bold/numbering!
-function parseMcqs(markdown) {
-  if (!markdown) return [];
-  // Split at bold or plain numbers at line start (handles **8.**, 9., etc)
-  const blocks = markdown
-    .split(/\n\s*(?:\*\*)?\d+\.(?:\*\*)?\s*/)
-    .filter(Boolean);
-
-  return blocks.map((block) => {
-    const lines = block.trim().split("\n").filter(Boolean);
-    const questionLine = lines[0] || "";
-    // Remove leading "**8.**" or "8."
-    const questionText = questionLine.replace(/^(?:\*\*)?\d+\.(?:\*\*)?\s*/, "");
-
-    // Find options: (a)-(d)
-    const options = ["a", "b", "c", "d"].map((letter) => {
-      const optLine = lines.find((l) =>
-        l.trim().toLowerCase().startsWith(`(${letter})`)
-      );
-      return {
-        option_text: optLine ? optLine.replace(/^\([a-d]\)\s*/i, "") : "",
-        is_correct: false,
-      };
-    });
-
-    // Find answer: Answer: (b)
-    const answerLine = lines.find((l) =>
-      l.toLowerCase().includes("answer")
-    );
-    let answerLetter = null;
-    if (answerLine) {
-      const m = answerLine.match(/[(\[]([a-dA-D])[\])]/);
-      if (m) answerLetter = m[1].toLowerCase();
-    }
-    if (answerLetter) {
-      options.forEach((opt, idx) => {
-        opt.is_correct = "abcd"[idx] === answerLetter;
-      });
-    }
-
-    return {
-      question: questionText,
-      options,
-      solution: "",
-      difficulty_level: "medium",
-      evaluating: false,
-      submitting: false,
-      evaluated: false,
-      pdfId: "",
-      topic: "",
-      diagramPath: "",
-    };
-  });
+// Helper to convert MCQ JSON from backend to UI-friendly object
+function formatMcqJsonForUI(mcq) {
+  const answerIdx = "abcd".indexOf((mcq.answer || "").toLowerCase());
+  return {
+    question: mcq.question,
+    options: (mcq.options || []).map((text, idx) => ({
+      option_text: text,
+      is_correct: idx === answerIdx,
+    })),
+    solution: "",
+    difficulty_level: "medium",
+    evaluating: false,
+    submitting: false,
+    evaluated: false,
+    pdfId: "",
+    topic: "",
+    diagramPath: "",
+  };
 }
 
 const Page = () => {
-  // Chapter and Topics logic with localStorage
+  // Chapter/Topics state with localStorage
   const [chapter, setChapter] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("mcq_chapter") || "";
@@ -82,9 +47,7 @@ const Page = () => {
   const [topicInput, setTopicInput] = useState(() => {
     if (typeof window !== "undefined") {
       const t = localStorage.getItem("mcq_topics");
-      if (t) {
-        return JSON.parse(t).join("\n");
-      }
+      if (t) return JSON.parse(t).join("\n");
     }
     return "";
   });
@@ -97,7 +60,6 @@ const Page = () => {
   const [extractedQuestions, setExtractedQuestions] = useState([]);
   const [pdfId, setPdfId] = useState("");
 
-  // Set topicInput if topics change externally
   useEffect(() => {
     if (topics.length > 0) setTopicInput(topics.join("\n"));
   }, [topics]);
@@ -136,15 +98,19 @@ const Page = () => {
       formData.append("image", mcqImage);
 
       const res = await axios.post(
-        "http://localhost:5000/api/extract-mcqs",
+        "http://127.0.0.1:5000/api/extract-mcqs",
         formData,
         {
           headers: { "Content-Type": "multipart/form-data" },
         }
       );
-      const mcqs = res.data.mcq_markdown;
-      const parsedQuestions = parseMcqs(mcqs);
-      setExtractedQuestions(parsedQuestions);
+      // Expecting: { success, type, mcqs: [ ... ] }
+      const mcqs = res.data.mcqs;
+      if (Array.isArray(mcqs)) {
+        setExtractedQuestions(mcqs.map(formatMcqJsonForUI));
+      } else {
+        setExtractError("No MCQs found in response.");
+      }
     } catch (err) {
       setExtractError(
         "Failed to extract MCQs: " +
@@ -179,7 +145,6 @@ const Page = () => {
 
   // Evaluate
   const handleEvaluateDifficulty = async (idx) => {
-    // Block if chapter/topics not set
     if (!chapter || topics.length === 0) {
       alert("Please set chapter name and topics first.");
       setShowEdit(true);
@@ -222,16 +187,13 @@ const Page = () => {
         arr[idx].options = arr[idx].options.map((opt, i) => ({
           ...opt,
           is_correct:
-            String.fromCharCode(65 + i) === answer.toUpperCase(),
+            String.fromCharCode(65 + i) === (answer || "").toUpperCase(),
         }));
         arr[idx].evaluated = true;
         arr[idx].evaluating = false;
         return arr;
       });
-
-      // SET PDF ID AUTOMATICALLY TO TOPIC_ID
       if (topic_id) setPdfId(topic_id.toString());
-
     } catch (error) {
       setExtractedQuestions((prev) => {
         const arr = [...prev];
@@ -352,7 +314,8 @@ const Page = () => {
         onClick={() => pasteBoxRef.current && pasteBoxRef.current.focus()}
       >
         <span className="text-gray-700">
-          <b>Paste</b> your image snippet here (Ctrl+V or ⌘+V)<br />
+          <b>Paste</b> your image snippet here (Ctrl+V or ⌘+V)
+          <br />
           or click to focus and paste
         </span>
       </div>
