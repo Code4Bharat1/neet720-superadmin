@@ -13,6 +13,13 @@ const Page = () => {
   const [pdfId, setPdfId] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [evaluating, setEvaluating] = useState(false);
+  const [submittedCount, setSubmittedCount] = useState(() => {
+  if (typeof window !== "undefined") {
+    return parseInt(localStorage.getItem("mcq_submitted_count") || "0", 10);
+  }
+  return 0;
+});
+
 
   const [questionForm, setQuestionForm] = useState({
     pdfId: "",
@@ -119,6 +126,11 @@ const Page = () => {
         questionForm
       );
       alert("Question created successfully. ID: " + data.questionId);
+      const currentCount = parseInt(localStorage.getItem("mcq_submitted_count") || "0", 10);
+const newCount = currentCount + 1;
+localStorage.setItem("mcq_submitted_count", newCount.toString());
+setSubmittedCount(newCount);
+
     } catch (error) {
       console.error("Question creation failed:", error);
       alert(error.response?.data?.message || "Error creating question");
@@ -127,6 +139,23 @@ const Page = () => {
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
+      <div className="text-green-700 font-medium">
+  Total Questions Submitted: {submittedCount}
+</div>
+<button
+  className="text-sm text-red-600 underline ml-2"
+  onClick={() => {
+    const confirmReset = window.confirm("Are you sure you want to reset the submitted count?");
+    if (confirmReset) {
+      localStorage.setItem("mcq_submitted_count", "0");
+      setSubmittedCount(0);
+    }
+  }}
+>
+  Reset Count
+</button>
+
+
       <h1 className="text-xl font-bold">Chapter-wise Question Entry</h1>
 
       {/* PDF Form */}

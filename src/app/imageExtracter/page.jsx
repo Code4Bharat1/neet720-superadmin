@@ -257,13 +257,16 @@ const Page = () => {
 </div>
 <button
   onClick={() => {
-    localStorage.setItem("mcq_submitted_count", "0");
-    setSubmittedCount(0);
+    if (window.confirm("Are you sure you want to reset the submitted count?")) {
+      localStorage.setItem("mcq_submitted_count", "0");
+      setSubmittedCount(0);
+    }
   }}
   className="ml-4 text-sm text-red-600 underline"
 >
   Reset Count
 </button>
+
 
 
       {/* Chapter/Topics section */}
