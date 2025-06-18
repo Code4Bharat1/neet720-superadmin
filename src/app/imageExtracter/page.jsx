@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from "react";
 import axios from "axios";
 
 // Helper to convert MCQ JSON from backend to UI-friendly object
-function formatMcqJsonForUI(mcq, pdfId = "") {
+function formatMcqJsonForUI(mcq) {
   const answerIdx = "abcd".indexOf((mcq.answer || "").toLowerCase());
   return {
     question: mcq.question,
@@ -17,16 +17,15 @@ function formatMcqJsonForUI(mcq, pdfId = "") {
     evaluating: false,
     submitting: false,
     evaluated: false,
-    pdfId: pdfId || "",
+    pdfId: "",
     topic: "",
-    topic_id: "",
     diagramPath: "",
   };
 }
 
-const SUBJECT_DEFAULT = "Physics"; // Change to allow user input if needed
-
 const Page = () => {
+
+  
   // Chapter/Topics state with localStorage
   const [chapter, setChapter] = useState(() => {
     if (typeof window !== "undefined") {
@@ -62,13 +61,13 @@ const Page = () => {
   const [extractError, setExtractError] = useState(null);
   const [extractedQuestions, setExtractedQuestions] = useState([]);
   const [pdfId, setPdfId] = useState("");
-  const [pdfIdLoading, setPdfIdLoading] = useState(false);
   const [submittedCount, setSubmittedCount] = useState(() => {
-    if (typeof window !== "undefined") {
-      return parseInt(localStorage.getItem("mcq_submitted_count") || "0", 10);
-    }
-    return 0;
-  });
+  if (typeof window !== "undefined") {
+    return parseInt(localStorage.getItem("mcq_submitted_count") || "0", 10);
+  }
+  return 0;
+});
+
 
   useEffect(() => {
     if (topics.length > 0) setTopicInput(topics.join("\n"));
@@ -94,38 +93,6 @@ const Page = () => {
     setMcqImage(e.target.files[0]);
   };
 
-  // PDF ID fetcher
-  const handleGetPdfId = async () => {
-    if (!chapter || topics.length === 0) {
-      alert("Please set chapter name and topics first.");
-      setShowEdit(true);
-      return;
-    }
-    setPdfIdLoading(true);
-    try {
-      const res = await axios.post(
-        "http://localhost:5000/pdfid", // <<=== Your endpoint
-        {
-          chapterName: chapter,
-          subject: SUBJECT_DEFAULT,
-          topicTags: topics,
-        }
-      );
-      if (res.data.pdfId) {
-        setPdfId(res.data.pdfId);
-        // Also update any existing MCQs with this pdfId
-        setExtractedQuestions((prev) =>
-          prev.map((q) => ({ ...q, pdfId: res.data.pdfId }))
-        );
-      } else {
-        alert("PDF ID not received.");
-      }
-    } catch (err) {
-      alert("Failed to get PDF ID from backend.");
-    }
-    setPdfIdLoading(false);
-  };
-
   const handleExtractMcqs = async () => {
     if (!mcqImage) {
       alert("Please upload an image first.");
@@ -134,6 +101,7 @@ const Page = () => {
     setExtracting(true);
     setExtractError(null);
     setExtractedQuestions([]);
+
     try {
       const formData = new FormData();
       formData.append("image", mcqImage);
@@ -148,7 +116,7 @@ const Page = () => {
       // Expecting: { success, type, mcqs: [ ... ] }
       const mcqs = res.data.mcqs;
       if (Array.isArray(mcqs)) {
-        setExtractedQuestions(mcqs.map((mcq) => formatMcqJsonForUI(mcq, pdfId)));
+        setExtractedQuestions(mcqs.map(formatMcqJsonForUI));
       } else {
         setExtractError("No MCQs found in response.");
       }
@@ -215,7 +183,6 @@ const Page = () => {
           mcq: mcqText,
           chapter: chapter,
           topics: topics,
-          subject: SUBJECT_DEFAULT,
         }
       );
       const { difficulty, answer, explanation, topic, topic_id } = res.data;
@@ -226,7 +193,6 @@ const Page = () => {
         arr[idx].difficulty_level = mappedDifficulty;
         arr[idx].solution = explanation;
         arr[idx].topic = topic || "";
-        arr[idx].topic_id = topic_id || "";
         arr[idx].options = arr[idx].options.map((opt, i) => ({
           ...opt,
           is_correct:
@@ -236,6 +202,7 @@ const Page = () => {
         arr[idx].evaluating = false;
         return arr;
       });
+      if (topic_id) setPdfId(topic_id.toString());
     } catch (error) {
       setExtractedQuestions((prev) => {
         const arr = [...prev];
@@ -286,19 +253,21 @@ const Page = () => {
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       <div className="text-xl font-semibold text-green-700 mb-4">
-        Total Questions Submitted: {submittedCount}
-      </div>
-      <button
-        onClick={() => {
-          if (window.confirm("Are you sure you want to reset the submitted count?")) {
-            localStorage.setItem("mcq_submitted_count", "0");
-            setSubmittedCount(0);
-          }
-        }}
-        className="ml-4 text-sm text-red-600 underline"
-      >
-        Reset Count
-      </button>
+  Total Questions Submitted: {submittedCount}
+</div>
+<button
+  onClick={() => {
+    if (window.confirm("Are you sure you want to reset the submitted count?")) {
+      localStorage.setItem("mcq_submitted_count", "0");
+      setSubmittedCount(0);
+    }
+  }}
+  className="ml-4 text-sm text-red-600 underline"
+>
+  Reset Count
+</button>
+
+
 
       {/* Chapter/Topics section */}
       <div className="border p-4 rounded shadow mb-4 bg-gray-50">
@@ -364,21 +333,6 @@ const Page = () => {
             </button>
           </div>
         )}
-        {/* Add button to get PDF ID from backend */}
-        <button
-          onClick={handleGetPdfId}
-          className="bg-indigo-600 text-white px-4 py-2 rounded mt-4"
-          disabled={pdfIdLoading || !chapter || topics.length === 0}
-        >
-          {pdfIdLoading ? "Getting PDF ID..." : "Get PDF ID"}
-        </button>
-        {/* Display PDF ID */}
-        <input
-          placeholder="PDF ID (auto-filled after evaluation)"
-          className="block border p-2 my-2 w-full max-w-xs"
-          value={pdfId}
-          readOnly
-        />
       </div>
 
       <div
@@ -423,6 +377,12 @@ const Page = () => {
             />
           </div>
         )}
+        <input
+          placeholder="PDF ID (auto-filled after evaluation)"
+          className="block border p-2 my-2 w-full max-w-xs"
+          value={pdfId}
+          onChange={(e) => setPdfId(e.target.value)}
+        />
       </div>
 
       {extractedQuestions.length > 0 && (
@@ -465,39 +425,31 @@ const Page = () => {
                 </div>
               ))}
 
-              <button
-                onClick={() => handleEvaluateDifficulty(idx)}
-                className="bg-purple-600 text-white px-4 py-2 rounded mt-4"
-                disabled={q.evaluating}
-              >
-                {q.evaluating
-                  ? "Evaluating..."
-                  : q.evaluated
-                  ? "Evaluated"
-                  : "Evaluate"}
-              </button>
+             <button
+  onClick={() => handleEvaluateDifficulty(idx)}
+  className="bg-purple-600 text-white px-4 py-2 rounded mt-4"
+  disabled={q.evaluating}
+>
+  {q.evaluating
+    ? "Evaluating..."
+    : q.evaluated
+    ? "Evaluated"
+    : "Evaluate"}
+</button>
 
-              {q.topic && (
-                <div className="my-2">
-                  <span className="font-semibold text-gray-700">Topic:&nbsp;</span>
-                  <span className="text-blue-600">{q.topic}</span>
-                </div>
-              )}
-              {q.topic_id && (
-                <input
-                  placeholder="Topic ID (auto-fetched)"
-                  className="block border p-2 my-2 w-full max-w-xs bg-gray-100"
-                  value={q.topic_id}
-                  readOnly
-                />
-              )}
+{q.topic && (
+  <div className="my-2">
+    <span className="font-semibold text-gray-700">Topic:&nbsp;</span>
+    <span className="text-blue-600">{q.topic}</span>
+  </div>
+)}
 
-              <input
-                placeholder="PDF ID (auto-filled)"
-                className="block border p-2 my-2 w-full max-w-xs"
-                value={pdfId}
-                readOnly
-              />
+<input
+  placeholder="PDF ID (auto-filled after evaluation)"
+  className="block border p-2 my-2 w-full max-w-xs"
+  value={pdfId}
+  onChange={(e) => setPdfId(e.target.value)}
+/>
 
               <textarea
                 className="block border p-2 my-2 w-full"
@@ -506,7 +458,7 @@ const Page = () => {
                 onChange={(e) =>
                   updateQuestionField(idx, "solution", e.target.value)
                 }
-              />
+              />  
               <button
                 className={`bg-green-600 text-white px-4 py-2 rounded mt-2 ${
                   q.submitting ? "opacity-50" : ""
