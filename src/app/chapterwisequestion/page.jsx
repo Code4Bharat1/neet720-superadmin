@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import axios from "axios";
 
 const Page = () => {
+  // PDF form state
   const [pdfForm, setPdfForm] = useState({
     chapterName: "",
     subject: "",
@@ -12,30 +13,255 @@ const Page = () => {
 
   const [pdfId, setPdfId] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [evaluating, setEvaluating] = useState(false);
   const [submittedCount, setSubmittedCount] = useState(() => {
-  if (typeof window !== "undefined") {
-    return parseInt(localStorage.getItem("mcq_submitted_count") || "0", 10);
-  }
-  return 0;
-});
-
-
-  const [questionForm, setQuestionForm] = useState({
-    pdfId: "",
-    topicId: "", // 💡 Auto-detected topic name
-    question: "",
-    difficulty_level: "medium",
-    options: [
-      { option_text: "", is_correct: false },
-      { option_text: "", is_correct: false },
-      { option_text: "", is_correct: false },
-      { option_text: "", is_correct: false },
-    ],
-    solution: "",
-    diagramPath: "",
+    if (typeof window !== "undefined") {
+      return parseInt(localStorage.getItem("mcq_submitted_count") || "0", 10);
+    }
+    return 0;
   });
 
+  // MCQ Extraction state
+  const [mcqImage, setMcqImage] = useState(null);
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState(null);
+  const [extractedQuestions, setExtractedQuestions] = useState([]);
+  const pasteBoxRef = useRef(null);
+
+  // Handler for image paste (extract MCQs)
+  const handlePasteImage = (e) => {
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf("image") !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          setMcqImage(file);
+          setExtractError(null);
+          break;
+        }
+      }
+    }
+  };
+
+  // Handler for image upload (extract MCQs)
+  const handleMcqImageChange = (e) => {
+    setMcqImage(e.target.files[0]);
+  };
+
+  // Extract MCQs from the image
+  const handleExtractMcqs = async () => {
+    if (!mcqImage) {
+      alert("Please paste or upload an image first.");
+      return;
+    }
+    setExtracting(true);
+    setExtractError(null);
+    setExtractedQuestions([]);
+
+    try {
+      const formData = new FormData();
+      formData.append("image", mcqImage);
+
+      const res = await axios.post(
+        "http://localhost:5000/api/extract-mcqs",
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        }
+      );
+      const mcqs = res.data.mcqs;
+      if (Array.isArray(mcqs)) {
+        setExtractedQuestions(
+          mcqs.map((mcq) => ({
+            ...mcq,
+            options: (mcq.options || []).map((opt, i) => ({
+              option_text: opt,
+              is_correct: mcq.answer?.toLowerCase() === "abcd"[i],
+            })),
+            solution: "",
+            difficulty_level: "medium",
+            evaluating: false,
+            evaluated: false,
+            pdfId: pdfId || "",
+            diagramPath: "", // will hold url (if uploaded) or local preview (if pasted)
+            diagramFile: null, // will hold File/Blob if pasted
+            diagramPreview: "", // for pasted image preview (object url or base64)
+          }))
+        );
+      } else {
+        setExtractError("No MCQs found in response.");
+      }
+    } catch (err) {
+      setExtractError(
+        "Failed to extract MCQs: " +
+          (err.response?.data?.error || err.message)
+      );
+    } finally {
+      setExtracting(false);
+    }
+  };
+
+  // Update question field
+  const updateQuestionField = (idx, field, value) => {
+    setExtractedQuestions((prev) => {
+      const arr = [...prev];
+      arr[idx][field] = value;
+      return arr;
+    });
+  };
+
+  // Update an option field
+  const updateOptionField = (qIdx, optIdx, field, value) => {
+    setExtractedQuestions((prev) => {
+      const arr = [...prev];
+      arr[qIdx].options = arr[qIdx].options.map((opt, i) =>
+        i === optIdx
+          ? { ...opt, [field]: value }
+          : { ...opt, is_correct: field === "is_correct" ? false : opt.is_correct }
+      );
+      return arr;
+    });
+  };
+
+  // Evaluate difficulty for a question
+  const handleEvaluateDifficulty = async (idx) => {
+    const q = extractedQuestions[idx];
+    const mcqText =
+      `${q.question}\n` +
+      q.options
+        .map(
+          (opt, i) => `${String.fromCharCode(65 + i)}. ${opt.option_text}`
+        )
+        .join("\n");
+    try {
+      updateQuestionField(idx, "evaluating", true);
+
+      const res = await axios.post("http://localhost:5000/api/assess-difficulty", {
+        mcq: mcqText,
+        chapter: pdfForm.chapterName,
+        topics: pdfForm.topicTags.split(",").map(tag => tag.trim()),
+        subject: pdfForm.subject,
+      });
+
+      const { difficulty, answer, explanation } = res.data;
+      updateQuestionField(idx, "difficulty_level", difficulty);
+      updateQuestionField(idx, "solution", explanation);
+      updateQuestionField(
+        idx,
+        "options",
+        q.options.map((opt, i) => ({
+          ...opt,
+          is_correct: String.fromCharCode(65 + i) === (answer || "").toUpperCase(),
+        }))
+      );
+      updateQuestionField(idx, "evaluated", true);
+    } catch (error) {
+      alert("Failed to evaluate difficulty.");
+    } finally {
+      updateQuestionField(idx, "evaluating", false);
+    }
+  };
+
+// Paste handler (diagram): uploads immediately, sets diagramPath to AWS url
+const handleDiagramPaste = async (e, idx) => {
+  const items = e.clipboardData.items;
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].type.indexOf("image") !== -1) {
+      const file = items[i].getAsFile();
+      if (file) {
+        const formData = new FormData();
+        formData.append("file", file);
+        try {
+          setUploading(true);
+          const res = await axios.post(
+            `${process.env.NEXT_PUBLIC_API_BASE_URL}/upload`,
+            formData,
+            {
+              headers: { "Content-Type": "multipart/form-data" },
+            }
+          );
+          const imageUrl = res.data.url;
+          updateQuestionField(idx, "diagramPath", imageUrl);
+        } catch (err) {
+          alert("Failed to upload pasted image");
+        } finally {
+          setUploading(false);
+        }
+        break;
+      }
+    }
+  }
+};
+
+
+
+ const handleDiagramUpload = async (e, idx) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const formData = new FormData();
+  formData.append("file", file);
+  try {
+    setUploading(true);
+    const res = await axios.post(
+      `${process.env.NEXT_PUBLIC_API_BASE_URL}/upload`,
+      formData,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+      }
+    );
+    const imageUrl = res.data.url;
+    updateQuestionField(idx, "diagramPath", imageUrl);
+  } catch (err) {
+    alert("Failed to upload image");
+  } finally {
+    setUploading(false);
+  }
+};
+
+
+  const handleRemoveDiagram = (idx) => {
+    updateQuestionField(idx, "diagramPath", "");
+    updateQuestionField(idx, "diagramFile", null);
+    updateQuestionField(idx, "diagramPreview", "");
+  };
+
+  // Submit a single question (upload pasted diagram if any)
+  const handleCreateQuestion = async (idx) => {
+    const q = extractedQuestions[idx];
+    let diagramUrl = q.diagramPath;
+
+    // If a diagram was pasted, upload it now before submit
+    if (!diagramUrl && q.diagramFile) {
+      const formData = new FormData();
+      formData.append("file", q.diagramFile);
+      try {
+        setUploading(true);
+        const res = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/upload`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        diagramUrl = res.data.url;
+      } catch (err) {
+        alert("Failed to upload pasted image");
+        setUploading(false);
+        return;
+      } finally {
+        setUploading(false);
+      }
+    }
+
+    try {
+      await axios.post(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/chatper-wise-question`,
+        { ...q, diagramPath: diagramUrl }
+      );
+      alert(`Question ${idx + 1} created successfully.`);
+      setSubmittedCount(c => c + 1);
+      localStorage.setItem("mcq_submitted_count", (submittedCount + 1).toString());
+    } catch (error) {
+      alert("Error creating question: " + (error.response?.data?.message || ""));
+    }
+  };
+
+  // Step 1: PDF creation
   const handleCreatePdf = async () => {
     try {
       const { data } = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/pdfid`, {
@@ -45,279 +271,218 @@ const Page = () => {
       });
 
       setPdfId(data.pdfId);
-      setQuestionForm((prev) => ({ ...prev, pdfId: data.pdfId }));
+      setExtractedQuestions(prev => prev.map(q => ({ ...q, pdfId: data.pdfId })));
       alert("PDF Created. PDF ID: " + data.pdfId);
     } catch (error) {
-      console.error("PDF creation failed:", error);
       alert(error.response?.data?.message || "Error creating PDF");
-    }
-  };
-
-  const handleImageUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const formData = new FormData();
-    formData.append("file", file);
-
-    try {
-      setUploading(true);
-      const res = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/upload`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-
-      const imageUrl = res.data.url;
-      setQuestionForm((prev) => ({ ...prev, diagramPath: imageUrl }));
-    } catch (err) {
-      console.error("Image upload failed:", err);
-      alert("Failed to upload image");
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleRemoveImage = () => {
-    setQuestionForm((prev) => ({ ...prev, diagramPath: "" }));
-  };
-
-  const handleEvaluateDifficulty = async () => {
-    const mcqText =
-      `${questionForm.question}\n` +
-      questionForm.options
-        .map((opt, i) => `${String.fromCharCode(65 + i)}. ${opt.option_text}`)
-        .join("\n");
-
-    try {
-      setEvaluating(true);
-      const res = await axios.post(`http://localhost:5000/api/assess-difficulty`, {
-        mcq: mcqText,
-        chapter: pdfForm.chapterName, // ✅ send chapter name
-      });
-
-      const { difficulty, answer, explanation, topic } = res.data;
-      const mappedDifficulty = difficulty === "easy" ? "simple" : difficulty;
-
-      setQuestionForm((prev) => {
-        const updatedOptions = prev.options.map((opt, idx) => ({
-          ...opt,
-          is_correct: String.fromCharCode(65 + idx) === answer.toUpperCase(),
-        }));
-
-        return {
-          ...prev,
-          difficulty_level: mappedDifficulty,
-          options: updatedOptions,
-          solution: explanation,
-          topicId: topic || "", // ✅ save auto-detected topic
-        };
-      });
-    } catch (error) {
-      console.error("Difficulty evaluation failed:", error);
-      alert("Failed to evaluate difficulty.");
-    } finally {
-      setEvaluating(false);
-    }
-  };
-
-  const handleCreateQuestion = async () => {
-    try {
-      const { data } = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/chatper-wise-question`,
-        questionForm
-      );
-      alert("Question created successfully. ID: " + data.questionId);
-      const currentCount = parseInt(localStorage.getItem("mcq_submitted_count") || "0", 10);
-const newCount = currentCount + 1;
-localStorage.setItem("mcq_submitted_count", newCount.toString());
-setSubmittedCount(newCount);
-
-    } catch (error) {
-      console.error("Question creation failed:", error);
-      alert(error.response?.data?.message || "Error creating question");
     }
   };
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
       <div className="text-green-700 font-medium">
-  Total Questions Submitted: {submittedCount}
-</div>
-<button
-  className="text-sm text-red-600 underline ml-2"
-  onClick={() => {
-    const confirmReset = window.confirm("Are you sure you want to reset the submitted count?");
-    if (confirmReset) {
-      localStorage.setItem("mcq_submitted_count", "0");
-      setSubmittedCount(0);
-    }
-  }}
->
-  Reset Count
-</button>
-
-
-      <h1 className="text-xl font-bold">Chapter-wise Question Entry</h1>
-
-      {/* PDF Form */}
-      <div className="border p-4 rounded shadow">
-        <h2 className="text-lg font-semibold">Step 1: Create PDF Entry</h2>
-        <input
-          placeholder="Chapter Name"
-          className="block border p-2 my-2 w-full"
-          value={pdfForm.chapterName}
-          onChange={(e) => setPdfForm({ ...pdfForm, chapterName: e.target.value })}
-        />
-        <input
-          placeholder="Subject"
-          className="block border p-2 my-2 w-full"
-          value={pdfForm.subject}
-          onChange={(e) => setPdfForm({ ...pdfForm, subject: e.target.value })}
-        />
-        <input
-          placeholder="Topic Tags (comma-separated)"
-          className="block border p-2 my-2 w-full"
-          value={pdfForm.topicTags}
-          onChange={(e) => setPdfForm({ ...pdfForm, topicTags: e.target.value })}
-        />
-        <button
-          onClick={handleCreatePdf}
-          className="bg-blue-500 text-white px-4 py-2 rounded"
-        >
-          Get PDF ID
-        </button>
+        Total Questions Submitted: {submittedCount}
       </div>
-
-      {/* Question Form */}
-      <div className="border p-4 rounded shadow">
-        <h2 className="text-lg font-semibold">Step 2: Create Question</h2>
-
-        <input
-          placeholder="PDF ID"
-          className="block border p-2 my-2 w-full"
-          value={questionForm.pdfId}
-          onChange={(e) =>
-            setQuestionForm({ ...questionForm, pdfId: e.target.value })
+      <button
+        className="text-sm text-red-600 underline ml-2"
+        onClick={() => {
+          const confirmReset = window.confirm("Are you sure you want to reset the submitted count?");
+          if (confirmReset) {
+            localStorage.setItem("mcq_submitted_count", "0");
+            setSubmittedCount(0);
           }
-        />
+        }}
+      >
+        Reset Count
+      </button>
 
-        <textarea
-          placeholder="Question Text"
-          className="block border p-2 my-2 w-full"
-          value={questionForm.question}
-          onChange={(e) =>
-            setQuestionForm({ ...questionForm, question: e.target.value })
-          }
-        />
+      
 
-        <h3 className="font-semibold mt-4">Options:</h3>
-        {questionForm.options.map((opt, idx) => (
-          <div key={idx} className="flex items-center gap-2 my-1">
+      {/* MCQ Extraction and Question Forms */}
+      <div className="border p-4 rounded shadow mb-6">
+        <h2 className="text-lg font-semibold">Step 2: Paste/Upload MCQ Image & Extract</h2>
+        <div
+          ref={pasteBoxRef}
+          tabIndex={0}
+          onPaste={handlePasteImage}
+          className="border-2 border-dashed border-blue-400 rounded p-6 text-center mb-4 cursor-pointer hover:bg-blue-50 focus:bg-blue-50"
+          style={{ minHeight: "80px" }}
+          onClick={() => pasteBoxRef.current && pasteBoxRef.current.focus()}
+        >
+          <span className="text-gray-700">
+            <b>Paste</b> your image snippet here (Ctrl+V or ⌘+V)<br />
+            or click to focus and paste, or
             <input
-              placeholder={`Option ${idx + 1}`}
-              className="flex-1 border p-2"
-              value={opt.option_text}
-              onChange={(e) => {
-                const updated = [...questionForm.options];
-                updated[idx].option_text = e.target.value;
-                setQuestionForm({ ...questionForm, options: updated });
-              }}
+              type="file"
+              accept="image/*"
+              onChange={handleMcqImageChange}
+              className="ml-2"
             />
-            <label className="flex items-center gap-1">
-              <input
-                type="checkbox"
-                checked={opt.is_correct}
-                onChange={(e) => {
-                  const updated = [...questionForm.options];
-                  updated[idx].is_correct = e.target.checked;
-                  setQuestionForm({ ...questionForm, options: updated });
-                }}
-              />
-              Correct
-            </label>
-          </div>
-        ))}
-
+          </span>
+        </div>
         <button
-          onClick={handleEvaluateDifficulty}
-          className="bg-purple-600 text-white px-4 py-2 rounded mt-2"
+          className="bg-blue-600 text-white px-4 py-2 rounded"
+          onClick={handleExtractMcqs}
+          disabled={extracting}
         >
-          {evaluating ? "Evaluating..." : "Evaluate Difficulty"}
+          {extracting ? "Extracting..." : "Extract MCQs"}
         </button>
-
-        <select
-          value={questionForm.difficulty_level}
-          onChange={(e) =>
-            setQuestionForm({ ...questionForm, difficulty_level: e.target.value })
-          }
-          className="block border p-2 my-2 w-full"
-        >
-          <option value="simple">Simple</option>
-          <option value="medium">Medium</option>
-          <option value="hard">Hard</option>
-        </select>
-
-        <textarea
-          placeholder="Solution"
-          className="block border p-2 my-2 w-full"
-          value={questionForm.solution}
-          onChange={(e) =>
-            setQuestionForm({ ...questionForm, solution: e.target.value })
-          }
-        />
-
-        {/* ✅ Topic display */}
-        <input
-          placeholder="Topic (auto-detected)"
-          className="block border p-2 my-2 w-full bg-gray-100"
-          value={questionForm.topicId}
-          readOnly
-        />
-
-        <h3 className="font-semibold mt-4">Upload Diagram:</h3>
-        <input
-          type="file"
-          accept="image/*"
-          className="block my-2"
-          onChange={handleImageUpload}
-        />
-        {uploading && <p className="text-sm text-gray-500">Uploading image...</p>}
-
-        <input
-          placeholder="Diagram URL"
-          className="block border p-2 my-2 w-full"
-          value={questionForm.diagramPath}
-          onChange={(e) =>
-            setQuestionForm({ ...questionForm, diagramPath: e.target.value })
-          }
-        />
-
-        {questionForm.diagramPath && (
-          <div className="mt-2 relative w-fit">
+        {extractError && <p className="text-red-500 mt-2">{extractError}</p>}
+        {mcqImage && (
+          <div className="mt-2">
             <img
-              src={questionForm.diagramPath}
-              alt="Uploaded diagram"
+              src={URL.createObjectURL(mcqImage)}
+              alt="MCQ upload preview"
               className="max-w-xs border rounded"
             />
-            <button
-              onClick={handleRemoveImage}
-              className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center hover:bg-red-600"
-              title="Remove image"
-            >
-              ✕
-            </button>
-            <p className="text-xs break-all text-gray-600 mt-1">
-              {questionForm.diagramPath}
-            </p>
           </div>
         )}
-
-        <button
-          onClick={handleCreateQuestion}
-          className="bg-green-600 text-white px-4 py-2 rounded mt-4"
-        >
-          Submit Question
-        </button>
       </div>
+
+      {extractedQuestions.length > 0 && (
+        <div>
+          <h2 className="text-lg font-semibold mb-2">
+            Step 3: Review, Evaluate & Submit Each MCQ
+          </h2>
+          {extractedQuestions.map((q, idx) => (
+            <div
+              key={idx}
+              className="mb-8 border p-4 rounded shadow bg-gray-50"
+            >
+              <div className="font-bold mb-2">Question {idx + 1}</div>
+              <input
+                placeholder="PDF ID"
+                className="block border p-2 my-2 w-full"
+                value={q.pdfId || pdfId || ""}
+                onChange={(e) =>
+                  updateQuestionField(idx, "pdfId", e.target.value)
+                }
+              />
+              <textarea
+                className="block border p-2 my-2 w-full"
+                value={q.question}
+                onChange={(e) =>
+                  updateQuestionField(idx, "question", e.target.value)
+                }
+              />
+              <h3 className="font-semibold mt-4">Options:</h3>
+              {q.options.map((opt, i) => (
+                <div key={i} className="flex items-center gap-2 my-1">
+                  <input
+                    className="flex-1 border p-2"
+                    value={opt.option_text}
+                    onChange={(e) =>
+                      updateOptionField(idx, i, "option_text", e.target.value)
+                    }
+                  />
+                  <label className="flex items-center gap-1">
+                    <input
+                      type="checkbox"
+                      checked={opt.is_correct}
+                      onChange={(e) =>
+                        updateOptionField(idx, i, "is_correct", e.target.checked)
+                      }
+                    />
+                    Correct
+                  </label>
+                </div>
+              ))}
+
+              <button
+                onClick={() => handleEvaluateDifficulty(idx)}
+                className="bg-purple-600 text-white px-4 py-2 rounded mt-4"
+                disabled={q.evaluating}
+              >
+                {q.evaluating
+                  ? "Evaluating..."
+                  : q.evaluated
+                  ? "Evaluated"
+                  : "Evaluate"}
+              </button>
+
+              <select
+                value={q.difficulty_level}
+                onChange={(e) =>
+                  updateQuestionField(idx, "difficulty_level", e.target.value)
+                }
+                className="block border p-2 my-2 w-full"
+              >
+                <option value="simple">Simple</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
+              </select>
+
+              <textarea
+                className="block border p-2 my-2 w-full"
+                placeholder="Solution"
+                value={q.solution}
+                onChange={(e) =>
+                  updateQuestionField(idx, "solution", e.target.value)
+                }
+              />
+
+              <h3 className="font-semibold mt-4">Paste or Upload Diagram:</h3>
+              <div
+                tabIndex={0}
+                onPaste={(e) => handleDiagramPaste(e, idx)}
+                className="border-2 border-dashed border-green-400 rounded p-4 text-center mb-2 cursor-pointer hover:bg-green-50 focus:bg-green-50"
+                style={{ minHeight: "60px" }}
+                title="Paste a diagram image here (Ctrl+V)"
+              >
+                <span className="text-gray-700 text-sm">
+                  <b>Paste</b> your diagram here (Ctrl+V or ⌘+V)
+                  <br />or&nbsp;
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleDiagramUpload(e, idx)}
+                    className="inline-block ml-2"
+                  />
+                </span>
+              </div>
+
+              <input
+                placeholder="Diagram URL"
+                className="block border p-2 my-2 w-full"
+                value={q.diagramPath}
+                onChange={(e) =>
+                  updateQuestionField(idx, "diagramPath", e.target.value)
+                }
+              />
+
+              {(q.diagramPreview || q.diagramPath) && (
+                <div className="mt-2 relative w-fit">
+                  <img
+                    src={q.diagramPreview || q.diagramPath}
+                    alt="Diagram preview"
+                    className="max-w-xs border rounded"
+                  />
+                  <button
+                    onClick={() => handleRemoveDiagram(idx)}
+                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center hover:bg-red-600"
+                    title="Remove image"
+                  >
+                    ✕
+                  </button>
+                  {q.diagramPath && (
+                    <p className="text-xs break-all text-gray-600 mt-1">
+                      {q.diagramPath}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <button
+                className="bg-green-600 text-white px-4 py-2 rounded mt-4"
+                onClick={() => handleCreateQuestion(idx)}
+                disabled={uploading}
+              >
+                {uploading ? "Uploading..." : "Submit Question"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

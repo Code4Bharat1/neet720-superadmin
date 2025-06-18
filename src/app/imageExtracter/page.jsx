@@ -425,23 +425,32 @@ const Page = () => {
                 </div>
               ))}
 
-              <button
-                onClick={() => handleEvaluateDifficulty(idx)}
-                className="bg-purple-600 text-white px-4 py-2 rounded mt-4"
-                disabled={q.evaluating}
-              >
-                {q.evaluating
-                  ? "Evaluating..."
-                  : q.evaluated
-                  ? "Evaluated"
-                  : "Evaluate"}
-              </button>
-              {q.topic && (
-                <div className="my-2">
-                  <span className="font-semibold text-gray-700">Topic:&nbsp;</span>
-                  <span className="text-blue-600">{q.topic}</span>
-                </div>
-              )}
+             <button
+  onClick={() => handleEvaluateDifficulty(idx)}
+  className="bg-purple-600 text-white px-4 py-2 rounded mt-4"
+  disabled={q.evaluating}
+>
+  {q.evaluating
+    ? "Evaluating..."
+    : q.evaluated
+    ? "Evaluated"
+    : "Evaluate"}
+</button>
+
+{q.topic && (
+  <div className="my-2">
+    <span className="font-semibold text-gray-700">Topic:&nbsp;</span>
+    <span className="text-blue-600">{q.topic}</span>
+  </div>
+)}
+
+<input
+  placeholder="PDF ID (auto-filled after evaluation)"
+  className="block border p-2 my-2 w-full max-w-xs"
+  value={pdfId}
+  onChange={(e) => setPdfId(e.target.value)}
+/>
+
               <textarea
                 className="block border p-2 my-2 w-full"
                 placeholder="Solution"
