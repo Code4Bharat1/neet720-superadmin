@@ -298,7 +298,7 @@ const Page = () => {
       </button>
 
       {/* PDF Form */}
-      <div className="border p-4 rounded shadow mb-6">
+      {/* <div className="border p-4 rounded shadow mb-6">
         <h2 className="text-lg font-semibold">Step 1: Create PDF Entry</h2>
         <input
           placeholder="Chapter Name"
@@ -329,7 +329,7 @@ const Page = () => {
             Current PDF ID: {pdfId}
           </div>
         )}
-      </div>
+      </div> */}
 
       {/* MCQ Extraction and Question Forms */}
       <div className="border p-4 rounded shadow mb-6">
