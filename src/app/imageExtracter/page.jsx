@@ -3,7 +3,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import axios from "axios";
 
-function formatMcqJsonForUI(mcq, pdfId = "") {
+// Helper to convert MCQ JSON from backend to UI-friendly object
+function formatMcqJsonForUI(mcq) {
   const answerIdx = "abcd".indexOf((mcq.answer || "").toLowerCase());
   return {
     question: mcq.question,
@@ -16,26 +17,21 @@ function formatMcqJsonForUI(mcq, pdfId = "") {
     evaluating: false,
     submitting: false,
     evaluated: false,
-    pdfId: pdfId || "",
+    pdfId: "",
     topic: "",
-    topic_id: "",
     diagramPath: "",
   };
 }
 
 const Page = () => {
-  // Subject/Chapter/Topics state
+
+  
+  // Chapter/Topics state with localStorage
   const [chapter, setChapter] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("mcq_chapter") || "";
     }
     return "";
-  });
-  const [subject, setSubject] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("mcq_subject") || "Physics"; // Default subject
-    }
-    return "Physics";
   });
   const [topics, setTopics] = useState(() => {
     if (typeof window !== "undefined") {
@@ -58,19 +54,20 @@ const Page = () => {
     return "";
   });
 
+  // MCQ extraction
   const pasteBoxRef = useRef(null);
   const [mcqImage, setMcqImage] = useState(null);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState(null);
   const [extractedQuestions, setExtractedQuestions] = useState([]);
   const [pdfId, setPdfId] = useState("");
-  const [pdfIdLoading, setPdfIdLoading] = useState(false);
   const [submittedCount, setSubmittedCount] = useState(() => {
-    if (typeof window !== "undefined") {
-      return parseInt(localStorage.getItem("mcq_submitted_count") || "0", 10);
-    }
-    return 0;
-  });
+  if (typeof window !== "undefined") {
+    return parseInt(localStorage.getItem("mcq_submitted_count") || "0", 10);
+  }
+  return 0;
+});
+
 
   useEffect(() => {
     if (topics.length > 0) setTopicInput(topics.join("\n"));
@@ -91,39 +88,9 @@ const Page = () => {
     }
   };
 
+  // Handle image change and extraction
   const handleMcqImageChange = (e) => {
     setMcqImage(e.target.files[0]);
-  };
-
-  // PDF ID fetcher
-  const handleGetPdfId = async () => {
-    if (!chapter || topics.length === 0 || !subject) {
-      alert("Please set chapter name, topics, and subject first.");
-      setShowEdit(true);
-      return;
-    }
-    setPdfIdLoading(true);
-    try {
-      const res = await axios.post(
-        "http://localhost:5000/pdfid", // <<=== Your endpoint
-        {
-          chapterName: chapter,
-          subject: subject,  // Added subject field
-          topicTags: topics,
-        }
-      );
-      if (res.data.pdfId) {
-        setPdfId(res.data.pdfId);
-        setExtractedQuestions((prev) =>
-          prev.map((q) => ({ ...q, pdfId: res.data.pdfId }))
-        );
-      } else {
-        alert("PDF ID not received from backend.");
-      }
-    } catch (err) {
-      alert("Failed to get PDF ID from backend.");
-    }
-    setPdfIdLoading(false);
   };
 
   const handleExtractMcqs = async () => {
@@ -134,6 +101,7 @@ const Page = () => {
     setExtracting(true);
     setExtractError(null);
     setExtractedQuestions([]);
+
     try {
       const formData = new FormData();
       formData.append("image", mcqImage);
@@ -145,9 +113,10 @@ const Page = () => {
           headers: { "Content-Type": "multipart/form-data" },
         }
       );
+      // Expecting: { success, type, mcqs: [ ... ] }
       const mcqs = res.data.mcqs;
       if (Array.isArray(mcqs)) {
-        setExtractedQuestions(mcqs.map((mcq) => formatMcqJsonForUI(mcq, pdfId)));
+        setExtractedQuestions(mcqs.map(formatMcqJsonForUI));
       } else {
         setExtractError("No MCQs found in response.");
       }
@@ -183,10 +152,10 @@ const Page = () => {
     });
   };
 
-  // Whenever backend sends topic_id, set both topic_id and pdfId for that MCQ
+  // Evaluate
   const handleEvaluateDifficulty = async (idx) => {
-    if (!chapter || topics.length === 0 || !subject) {
-      alert("Please set chapter name, topics, and subject first.");
+    if (!chapter || topics.length === 0) {
+      alert("Please set chapter name and topics first.");
       setShowEdit(true);
       return;
     }
@@ -214,13 +183,9 @@ const Page = () => {
           mcq: mcqText,
           chapter: chapter,
           topics: topics,
-          subject: subject,  // Added subject field
         }
       );
-
-      console.log(res.data);
       const { difficulty, answer, explanation, topic, topic_id } = res.data;
-      
       const mappedDifficulty =
         difficulty === "easy" ? "simple" : difficulty;
       setExtractedQuestions((prev) => {
@@ -228,9 +193,6 @@ const Page = () => {
         arr[idx].difficulty_level = mappedDifficulty;
         arr[idx].solution = explanation;
         arr[idx].topic = topic || "";
-        arr[idx].topic_id = topic_id || "";
-        // Set topic_id as pdfId for this question if present:
-        if (topic_id) arr[idx].pdfId = String(topic_id);
         arr[idx].options = arr[idx].options.map((opt, i) => ({
           ...opt,
           is_correct:
@@ -240,6 +202,7 @@ const Page = () => {
         arr[idx].evaluating = false;
         return arr;
       });
+      if (topic_id) setPdfId(topic_id.toString());
     } catch (error) {
       setExtractedQuestions((prev) => {
         const arr = [...prev];
@@ -259,7 +222,7 @@ const Page = () => {
     });
 
     const q = { ...extractedQuestions[idx] };
-    q.pdfId = q.pdfId || pdfId;
+    if (pdfId) q.pdfId = pdfId;
 
     try {
       await axios.post(
@@ -290,39 +253,32 @@ const Page = () => {
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       <div className="text-xl font-semibold text-green-700 mb-4">
-        Total Questions Submitted: {submittedCount}
-      </div>
-      <button
-        onClick={() => {
-          if (window.confirm("Are you sure you want to reset the submitted count?")) {
-            localStorage.setItem("mcq_submitted_count", "0");
-            setSubmittedCount(0);
-          }
-        }}
-        className="ml-4 text-sm text-red-600 underline"
-      >
-        Reset Count
-      </button>
+  Total Questions Submitted: {submittedCount}
+</div>
+<button
+  onClick={() => {
+    if (window.confirm("Are you sure you want to reset the submitted count?")) {
+      localStorage.setItem("mcq_submitted_count", "0");
+      setSubmittedCount(0);
+    }
+  }}
+  className="ml-4 text-sm text-red-600 underline"
+>
+  Reset Count
+</button>
 
-      {/* Chapter/Topics/Subjects section */}
+
+
+      {/* Chapter/Topics section */}
       <div className="border p-4 rounded shadow mb-4 bg-gray-50">
         {showEdit ? (
           <div>
-            <h2 className="font-semibold mb-2">Set Chapter, Topics, and Subject</h2>
+            <h2 className="font-semibold mb-2">Set Chapter and Topics</h2>
             <input
               className="border p-2 w-full my-2"
               placeholder="Chapter Name"
               value={chapter}
               onChange={(e) => setChapter(e.target.value)}
-            />
-            <input
-              className="border p-2 w-full my-2"
-              placeholder="Subject Name"
-              value={subject}
-              onChange={(e) => {
-                setSubject(e.target.value);
-                localStorage.setItem("mcq_subject", e.target.value);
-              }}
             />
             <textarea
               className="border p-2 w-full my-2"
@@ -355,9 +311,6 @@ const Page = () => {
                 <span className="font-semibold">Chapter:</span> {chapter}
               </div>
               <div>
-                <span className="font-semibold">Subject:</span> {subject}
-              </div>
-              <div>
                 <span className="font-semibold">Topics:</span>{" "}
                 {topics.map((t) => (
                   <span
@@ -380,24 +333,6 @@ const Page = () => {
             </button>
           </div>
         )}
-        {/* <div className="flex items-center mt-4">
-          <input
-            className="border p-2 w-full max-w-xs"
-            placeholder="PDF ID (auto or manual)"
-            value={pdfId}
-            onChange={e => {
-              setPdfId(e.target.value);
-              setExtractedQuestions((prev) => prev.map(q => ({ ...q, pdfId: e.target.value })));
-            }}
-          />
-          <button
-            className="ml-2 px-3 py-2 rounded bg-blue-600 text-white"
-            onClick={handleGetPdfId}
-            disabled={pdfIdLoading || !chapter || !topics.length}
-          >
-            {pdfIdLoading ? "Loading..." : "Get PDF ID"}
-          </button>
-        </div> */}
       </div>
 
       <div
@@ -442,6 +377,12 @@ const Page = () => {
             />
           </div>
         )}
+        <input
+          placeholder="PDF ID (auto-filled after evaluation)"
+          className="block border p-2 my-2 w-full max-w-xs"
+          value={pdfId}
+          onChange={(e) => setPdfId(e.target.value)}
+        />
       </div>
 
       {extractedQuestions.length > 0 && (
@@ -455,12 +396,6 @@ const Page = () => {
               className="mb-8 border p-4 rounded shadow bg-gray-50"
             >
               <div className="font-bold mb-2">Question {idx + 1}</div>
-              <input
-                placeholder="PDF ID (editable)"
-                className="block border p-2 my-2 w-full max-w-xs"
-                value={q.pdfId || ""}
-                onChange={e => updateQuestionField(idx, "pdfId", e.target.value)}
-              />
               <textarea
                 className="block border p-2 my-2 w-full"
                 value={q.question}
@@ -490,38 +425,31 @@ const Page = () => {
                 </div>
               ))}
 
-              <button
-                onClick={() => handleEvaluateDifficulty(idx)}
-                className="bg-purple-600 text-white px-4 py-2 rounded mt-4"
-                disabled={q.evaluating}
-              >
-                {q.evaluating
-                  ? "Evaluating..."
-                  : q.evaluated
-                  ? "Evaluated"
-                  : "Evaluate"}
-              </button>
+             <button
+  onClick={() => handleEvaluateDifficulty(idx)}
+  className="bg-purple-600 text-white px-4 py-2 rounded mt-4"
+  disabled={q.evaluating}
+>
+  {q.evaluating
+    ? "Evaluating..."
+    : q.evaluated
+    ? "Evaluated"
+    : "Evaluate"}
+</button>
 
-              {q.topic && (
-                <div className="my-2">
-                  <span className="font-semibold text-gray-700">Topic:&nbsp;</span>
-                  <input
-                    className="border p-2 w-full max-w-xs"
-                    value={q.topic}
-                    onChange={e =>
-                      updateQuestionField(idx, "topic", e.target.value)
-                    }
-                  />
-                </div>
-              )}
-              <input
-                placeholder="Topic ID (auto-fetched, editable)"
-                className="block border p-2 my-2 w-full max-w-xs"
-                value={q.topic_id}
-                onChange={e =>
-                  updateQuestionField(idx, "topic_id", e.target.value)
-                }
-              />
+{q.topic && (
+  <div className="my-2">
+    <span className="font-semibold text-gray-700">Topic:&nbsp;</span>
+    <span className="text-blue-600">{q.topic}</span>
+  </div>
+)}
+
+<input
+  placeholder="PDF ID (auto-filled after evaluation)"
+  className="block border p-2 my-2 w-full max-w-xs"
+  value={pdfId}
+  onChange={(e) => setPdfId(e.target.value)}
+/>
 
               <textarea
                 className="block border p-2 my-2 w-full"
@@ -530,27 +458,26 @@ const Page = () => {
                 onChange={(e) =>
                   updateQuestionField(idx, "solution", e.target.value)
                 }
-              />
+              />  
               <button
                 className={`bg-green-600 text-white px-4 py-2 rounded mt-2 ${
                   q.submitting ? "opacity-50" : ""
-               
-}`}
-onClick={() => handleSubmitExtractedQuestion(idx)}
-disabled={q.submitting || q.submitted}
->
-{q.submitting
-? "Submitting..."
-: q.submitted
-? "Submitted"
-: "Submit Question"}
-</button>
-</div>
-))}
-</div>
-)}
-</div>
-);
+                }`}
+                onClick={() => handleSubmitExtractedQuestion(idx)}
+                disabled={q.submitting || q.submitted}
+              >
+                {q.submitting
+                  ? "Submitting..."
+                  : q.submitted
+                  ? "Submitted"
+                  : "Submit Question"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 };
 
 export default Page;
