@@ -163,7 +163,6 @@ useEffect(() => {
     });
   };
 
-<<<<<<< HEAD
   // Evaluate difficulty for a question and fetch topic/topic_id
 const handleEvaluateDifficulty = async (idx) => {
   const q = extractedQuestions[idx];
@@ -205,80 +204,10 @@ const handleEvaluateDifficulty = async (idx) => {
     alert("Failed to evaluate difficulty.");
   } finally {
     updateQuestionField(idx, "evaluating", false);
-=======
-  // Evaluate difficulty for a question
-  const handleEvaluateDifficulty = async (idx) => {
-    const q = extractedQuestions[idx];
-    const mcqText =
-      `${q.question}\n` +
-      q.options
-        .map(
-          (opt, i) => `${String.fromCharCode(65 + i)}. ${opt.option_text}`
-        )
-        .join("\n");
-    try {
-      updateQuestionField(idx, "evaluating", true);
-
-      const res = await axios.post("http://localhost:5000/api/assess-difficulty", {
-        mcq: mcqText,
-        chapter: pdfForm.chapterName,
-        topics: pdfForm.topicTags.split(",").map(tag => tag.trim()),
-        subject: pdfForm.subject,
-      });
-
-      const { difficulty, answer, explanation } = res.data;
-      updateQuestionField(idx, "difficulty_level", difficulty);
-      updateQuestionField(idx, "solution", explanation);
-      updateQuestionField(
-        idx,
-        "options",
-        q.options.map((opt, i) => ({
-          ...opt,
-          is_correct: String.fromCharCode(65 + i) === (answer || "").toUpperCase(),
-        }))
-      );
-      updateQuestionField(idx, "evaluated", true);
-    } catch (error) {
-      alert("Failed to evaluate difficulty.");
-    } finally {
-      updateQuestionField(idx, "evaluating", false);
-    }
-  };
-
-// Paste handler (diagram): uploads immediately, sets diagramPath to AWS url
-const handleDiagramPaste = async (e, idx) => {
-  const items = e.clipboardData.items;
-  for (let i = 0; i < items.length; i++) {
-    if (items[i].type.indexOf("image") !== -1) {
-      const file = items[i].getAsFile();
-      if (file) {
-        const formData = new FormData();
-        formData.append("file", file);
-        try {
-          setUploading(true);
-          const res = await axios.post(
-            `${process.env.NEXT_PUBLIC_API_BASE_URL}/upload`,
-            formData,
-            {
-              headers: { "Content-Type": "multipart/form-data" },
-            }
-          );
-          const imageUrl = res.data.url;
-          updateQuestionField(idx, "diagramPath", imageUrl);
-        } catch (err) {
-          alert("Failed to upload pasted image");
-        } finally {
-          setUploading(false);
-        }
-        break;
-      }
-    }
->>>>>>> a0691a2066536973925fd1f39faeb2be4a1323e5
   }
 };
 
 
-<<<<<<< HEAD
   // Paste handler (diagram): uploads immediately, sets diagramPath to AWS url
   const handleDiagramPaste = async (e, idx) => {
     const items = e.clipboardData.items;
@@ -332,32 +261,6 @@ const handleDiagramPaste = async (e, idx) => {
       setUploading(false);
     }
   };
-=======
-
- const handleDiagramUpload = async (e, idx) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const formData = new FormData();
-  formData.append("file", file);
-  try {
-    setUploading(true);
-    const res = await axios.post(
-      `${process.env.NEXT_PUBLIC_API_BASE_URL}/upload`,
-      formData,
-      {
-        headers: { "Content-Type": "multipart/form-data" },
-      }
-    );
-    const imageUrl = res.data.url;
-    updateQuestionField(idx, "diagramPath", imageUrl);
-  } catch (err) {
-    alert("Failed to upload image");
-  } finally {
-    setUploading(false);
-  }
-};
-
->>>>>>> a0691a2066536973925fd1f39faeb2be4a1323e5
 
   const handleRemoveDiagram = (idx) => {
     updateQuestionField(idx, "diagramPath", "");
@@ -438,7 +341,6 @@ const handleDiagramPaste = async (e, idx) => {
       </button>
 
       
-<<<<<<< HEAD
         {/* Chapter/Topics/Subjects section */}
 <div className="border p-4 rounded shadow mb-4 bg-gray-50">
   {showEdit ? (
@@ -520,8 +422,6 @@ const handleDiagramPaste = async (e, idx) => {
 
 
 
-=======
->>>>>>> a0691a2066536973925fd1f39faeb2be4a1323e5
 
       {/* MCQ Extraction and Question Forms */}
       <div className="border p-4 rounded shadow mb-6">
@@ -646,7 +546,6 @@ const handleDiagramPaste = async (e, idx) => {
                 }
               />
 
-<<<<<<< HEAD
               <h3 className="font-semibold mt-4">Topic Suggestion:</h3>
               <input
                 placeholder="Topic (suggested, editable)"
@@ -666,8 +565,6 @@ const handleDiagramPaste = async (e, idx) => {
                 }
               /> */}
 
-=======
->>>>>>> a0691a2066536973925fd1f39faeb2be4a1323e5
               <h3 className="font-semibold mt-4">Paste or Upload Diagram:</h3>
               <div
                 tabIndex={0}
