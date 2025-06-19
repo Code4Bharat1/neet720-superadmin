@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import axios from "axios";
 
 const Page = () => {
+
+  
   // PDF form state
   const [pdfForm, setPdfForm] = useState({
     chapterName: "",
@@ -19,6 +21,28 @@ const Page = () => {
     }
     return 0;
   });
+
+const [chapter, setChapter] = useState("");
+const [subject, setSubject] = useState("Physics");
+const [topics, setTopics] = useState([]);
+const [topicInput, setTopicInput] = useState("");
+const [showEdit, setShowEdit] = useState(true);
+
+useEffect(() => {
+  if (typeof window !== "undefined") {
+    const storedChapter = localStorage.getItem("mcq_chapter") || "";
+    const storedSubject = localStorage.getItem("mcq_subject") || "Physics";
+    const storedTopics = JSON.parse(localStorage.getItem("mcq_topics") || "[]");
+
+    setChapter(storedChapter);
+    setSubject(storedSubject);
+    setTopics(storedTopics);
+    setTopicInput(storedTopics.join("\n"));
+    setShowEdit(!(storedChapter && storedTopics.length > 0));
+  }
+}, []);
+
+  
 
   // MCQ Extraction state
   const [mcqImage, setMcqImage] = useState(null);
@@ -41,6 +65,22 @@ const Page = () => {
       }
     }
   };
+  
+
+
+  useEffect(() => {
+  const savedForm = JSON.parse(localStorage.getItem("pdf_form") || "{}");
+  setPdfForm({
+    chapterName: savedForm.chapterName || "",
+    subject: savedForm.subject || "",
+    topicTags: savedForm.topicTags || "",
+  });
+}, []);
+
+// Save to localStorage every time it changes
+useEffect(() => {
+  localStorage.setItem("pdf_form", JSON.stringify(pdfForm));
+}, [pdfForm]);
 
   // Handler for image upload (extract MCQs)
   const handleMcqImageChange = (e) => {
@@ -82,9 +122,10 @@ const Page = () => {
             evaluating: false,
             evaluated: false,
             pdfId: pdfId || "",
-            diagramPath: "", // will hold url (if uploaded) or local preview (if pasted)
-            diagramFile: null, // will hold File/Blob if pasted
-            diagramPreview: "", // for pasted image preview (object url or base64)
+            topic: "",        // For topic suggestion
+            diagramPath: "",
+            diagramFile: null,
+            diagramPreview: "",
           }))
         );
       } else {
@@ -122,37 +163,30 @@ const Page = () => {
     });
   };
 
-  // Evaluate difficulty for a question
-  const handleEvaluateDifficulty = async (idx) => {
+  // Evaluate difficulty for a question and fetch topic/topic_id
+const handleEvaluateDifficulty = async (idx) => {
   const q = extractedQuestions[idx];
   const mcqText =
     `${q.question}\n` +
     q.options
-      .map(
-        (opt, i) => `${String.fromCharCode(65 + i)}. ${opt.option_text}`
-      )
+      .map((opt, i) => `${String.fromCharCode(65 + i)}. ${opt.option_text}`)
       .join("\n");
+
   try {
     updateQuestionField(idx, "evaluating", true);
 
-    const res = await axios.post("http://localhost:5000/api/assess-difficulty", {
+    
+    const res = await axios.post(`http://127.0.0.1:5000/api/assess-difficulty`, {
       mcq: mcqText,
-      chapter: pdfForm.chapterName,
-      topics: pdfForm.topicTags.split(",").map(tag => tag.trim()),
-      subject: pdfForm.subject,
+      chapter: chapter,
+      topics: topics,
+      subject: subject,
     });
 
-    console.log(res.data);
     const { difficulty, answer, explanation, topic, topic_id } = res.data;
+    console.log(topic_id);
 
-    // Save topic name and topic ID to localStorage
-    localStorage.setItem("topicName", topic);
-    localStorage.setItem("topicId", topic_id);
-
-    // *** set topic to question ***
-    updateQuestionField(idx, "topic", topic);
-
-    updateQuestionField(idx, "difficulty_level", difficulty);
+    updateQuestionField(idx, "difficulty_level", difficulty === "easy" ? "simple" : difficulty);
     updateQuestionField(idx, "solution", explanation);
     updateQuestionField(
       idx,
@@ -163,6 +197,9 @@ const Page = () => {
       }))
     );
     updateQuestionField(idx, "evaluated", true);
+    updateQuestionField(idx, "topic", topic || "");
+    // updateQuestionField(idx, "topic_id", topic_id || "");
+    updateQuestionField(idx, "pdfId", topic_id || ""); // ✅ Treat topic_id as pdfId
   } catch (error) {
     alert("Failed to evaluate difficulty.");
   } finally {
@@ -171,19 +208,118 @@ const Page = () => {
 };
 
 
-  // Save to localStorage and send data to backend to get topic name and ID
-  const handleFormSubmit = async () => {
-    if (!pdfForm.chapterName || !pdfForm.subject || !pdfForm.topicTags) {
-      alert("Please fill in chapter, subject, and topics fields.");
-      return;
+  // Paste handler (diagram): uploads immediately, sets diagramPath to AWS url
+  const handleDiagramPaste = async (e, idx) => {
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf("image") !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          const formData = new FormData();
+          formData.append("file", file);
+          try {
+            setUploading(true);
+            const res = await axios.post(
+              `${process.env.NEXT_PUBLIC_API_BASE_URL}/upload`,
+              formData,
+              {
+                headers: { "Content-Type": "multipart/form-data" },
+              }
+            );
+            const imageUrl = res.data.url;
+            updateQuestionField(idx, "diagramPath", imageUrl);
+          } catch (err) {
+            alert("Failed to upload pasted image");
+          } finally {
+            setUploading(false);
+          }
+          break;
+        }
+      }
+    }
+  };
+
+  const handleDiagramUpload = async (e, idx) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      setUploading(true);
+      const res = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/upload`,
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        }
+      );
+      const imageUrl = res.data.url;
+      updateQuestionField(idx, "diagramPath", imageUrl);
+    } catch (err) {
+      alert("Failed to upload image");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemoveDiagram = (idx) => {
+    updateQuestionField(idx, "diagramPath", "");
+    updateQuestionField(idx, "diagramFile", null);
+    updateQuestionField(idx, "diagramPreview", "");
+  };
+
+  // Submit a single question (upload pasted diagram if any)
+  const handleCreateQuestion = async (idx) => {
+    const q = extractedQuestions[idx];
+    let diagramUrl = q.diagramPath;
+
+    // If a diagram was pasted, upload it now before submit
+    if (!diagramUrl && q.diagramFile) {
+      const formData = new FormData();
+      formData.append("file", q.diagramFile);
+      try {
+        setUploading(true);
+        const res = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/upload`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        diagramUrl = res.data.url;
+      } catch (err) {
+        alert("Failed to upload pasted image");
+        setUploading(false);
+        return;
+      } finally {
+        setUploading(false);
+      }
     }
 
-    // Save data to localStorage
-    localStorage.setItem("chapterName", pdfForm.chapterName);
-    localStorage.setItem("subject", pdfForm.subject);
-    localStorage.setItem("topicTags", pdfForm.topicTags);
+    try {
+      await axios.post(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/chatper-wise-question`,
+        { ...q, diagramPath: diagramUrl }
+      );
+      alert(`Question ${idx + 1} created successfully.`);
+      setSubmittedCount(c => c + 1);
+      localStorage.setItem("mcq_submitted_count", (submittedCount + 1).toString());
+    } catch (error) {
+      alert("Error creating question: " + (error.response?.data?.message || ""));
+    }
+  };
 
-    await handleExtractMcqs();
+  // Step 1: PDF creation
+  const handleCreatePdf = async () => {
+    try {
+      const { data } = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/pdfid`, {
+        chapterName: pdfForm.chapterName,
+        subject: pdfForm.subject,
+        topicTags: pdfForm.topicTags.split(",").map(tag => tag.trim()),
+      });
+
+      setPdfId(data.pdfId);
+      setExtractedQuestions(prev => prev.map(q => ({ ...q, pdfId: data.pdfId })));
+      alert("PDF Created. PDF ID: " + data.pdfId);
+    } catch (error) {
+      alert(error.response?.data?.message || "Error creating PDF");
+    }
   };
 
   return (
@@ -204,43 +340,88 @@ const Page = () => {
         Reset Count
       </button>
 
-      {/* Chapter, Subject, and Topic Form Section */}
-      <div className="border p-4 rounded shadow mb-6">
-        <h2 className="text-lg font-semibold">Step 1: Enter Chapter, Subject, and Topics</h2>
-        <input
-          type="text"
-          className="border p-2 w-full mb-2"
-          placeholder="Chapter Name"
-          value={pdfForm.chapterName}
-          onChange={(e) =>
-            setPdfForm((prev) => ({ ...prev, chapterName: e.target.value }))
-          }
-        />
-        <input
-          type="text"
-          className="border p-2 w-full mb-2"
-          placeholder="Subject Name"
-          value={pdfForm.subject}
-          onChange={(e) =>
-            setPdfForm((prev) => ({ ...prev, subject: e.target.value }))
-          }
-        />
-        <textarea
-          className="border p-2 w-full mb-2"
-          placeholder="Enter topics, separated by commas"
-          value={pdfForm.topicTags}
-          onChange={(e) =>
-            setPdfForm((prev) => ({ ...prev, topicTags: e.target.value }))
-          }
-          rows={4}
-        />
-        <button
-          onClick={handleFormSubmit}
-          className="bg-blue-600 text-white px-4 py-2 rounded"
-        >
-          Save Data & Extract MCQs
-        </button>
+      
+        {/* Chapter/Topics/Subjects section */}
+<div className="border p-4 rounded shadow mb-4 bg-gray-50">
+  {showEdit ? (
+    <div>
+      <h2 className="font-semibold mb-2">Set Chapter, Topics, and Subject</h2>
+      <input
+        className="border p-2 w-full my-2"
+        placeholder="Chapter Name"
+        value={chapter}
+        onChange={(e) => setChapter(e.target.value)}
+      />
+      <input
+        className="border p-2 w-full my-2"
+        placeholder="Subject Name"
+        value={subject}
+        onChange={(e) => {
+          setSubject(e.target.value);
+          localStorage.setItem("mcq_subject", e.target.value);
+        }}
+      />
+      <textarea
+        className="border p-2 w-full my-2"
+        placeholder="Enter topics, one per line"
+        value={topicInput}
+        onChange={(e) => setTopicInput(e.target.value)}
+        rows={4}
+      />
+      <button
+        className="bg-blue-600 text-white px-4 py-2 rounded"
+        onClick={() => {
+          const topicsArr = topicInput
+            .split("\n")
+            .map((t) => t.trim())
+            .filter(Boolean);
+          setTopics(topicsArr);
+          setShowEdit(false);
+          localStorage.setItem("mcq_chapter", chapter);
+          localStorage.setItem("mcq_topics", JSON.stringify(topicsArr));
+        }}
+        disabled={!chapter || !topicInput.trim()}
+      >
+        Save
+      </button>
+    </div>
+  ) : (
+    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div>
+        <div>
+          <span className="font-semibold">Chapter:</span> {chapter}
+        </div>
+        <div>
+          <span className="font-semibold">Subject:</span> {subject}
+        </div>
+        <div>
+          <span className="font-semibold">Topics:</span>{" "}
+          {topics.map((t) => (
+            <span
+              key={t}
+              className="inline-block bg-blue-200 text-blue-800 px-2 py-1 m-1 rounded text-sm"
+            >
+              {t}
+            </span>
+          ))}
+        </div>
       </div>
+      <button
+        className="bg-gray-600 text-white px-3 py-2 rounded"
+        onClick={() => {
+          setShowEdit(true);
+          setTopicInput(topics.join("\n"));
+        }}
+      >
+        Edit Chapter/Topics
+      </button>
+    </div>
+  )}
+</div>
+
+
+
+
 
       {/* MCQ Extraction and Question Forms */}
       <div className="border p-4 rounded shadow mb-6">
@@ -344,13 +525,6 @@ const Page = () => {
                   : "Evaluate"}
               </button>
 
-              {q.topic && (
-  <div className="mb-2">
-    <span className="font-semibold text-gray-700">Topic:&nbsp;</span>
-    <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-sm">{q.topic}</span>
-  </div>
-)}
-
               <select
                 value={q.difficulty_level}
                 onChange={(e) =>
@@ -363,7 +537,6 @@ const Page = () => {
                 <option value="hard">Hard</option>
               </select>
 
-
               <textarea
                 className="block border p-2 my-2 w-full"
                 placeholder="Solution"
@@ -372,6 +545,84 @@ const Page = () => {
                   updateQuestionField(idx, "solution", e.target.value)
                 }
               />
+
+              <h3 className="font-semibold mt-4">Topic Suggestion:</h3>
+              <input
+                placeholder="Topic (suggested, editable)"
+                className="block border p-2 my-2 w-full"
+                value={q.topic || ""}
+                onChange={(e) =>
+                  updateQuestionField(idx, "topic", e.target.value)
+                }
+              />
+
+              {/* <input
+                placeholder="Topic ID (auto-fetched, editable)"
+                className="block border p-2 my-2 w-full"
+                value={q.topic_id || ""}
+                onChange={(e) =>
+                  updateQuestionField(idx, "topic_id", e.target.value)
+                }
+              /> */}
+
+              <h3 className="font-semibold mt-4">Paste or Upload Diagram:</h3>
+              <div
+                tabIndex={0}
+                onPaste={(e) => handleDiagramPaste(e, idx)}
+                className="border-2 border-dashed border-green-400 rounded p-4 text-center mb-2 cursor-pointer hover:bg-green-50 focus:bg-green-50"
+                style={{ minHeight: "60px" }}
+                title="Paste a diagram image here (Ctrl+V)"
+              >
+                <span className="text-gray-700 text-sm">
+                  <b>Paste</b> your diagram here (Ctrl+V or ⌘+V)
+                  <br />or&nbsp;
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleDiagramUpload(e, idx)}
+                    className="inline-block ml-2"
+                  />
+                </span>
+              </div>
+
+              <input
+                placeholder="Diagram URL"
+                className="block border p-2 my-2 w-full"
+                value={q.diagramPath}
+                onChange={(e) =>
+                  updateQuestionField(idx, "diagramPath", e.target.value)
+                }
+              />
+
+              {(q.diagramPreview || q.diagramPath) && (
+                <div className="mt-2 relative w-fit">
+                  <img
+                    src={q.diagramPreview || q.diagramPath}
+                    alt="Diagram preview"
+                    className="max-w-xs border rounded"
+                  />
+                  <button
+                    onClick={() => handleRemoveDiagram(idx)}
+                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center hover:bg-red-600"
+                    title="Remove image"
+                  >
+                    ✕
+                  </button>
+                  {q.diagramPath && (
+                    <p className="text-xs break-all text-gray-600 mt-1">
+                      {q.diagramPath}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <button
+                className="bg-green-600 text-white px-4 py-2 rounded mt-4"
+                onClick={() => handleCreateQuestion(idx)}
+                disabled={uploading}
+              >
+                {uploading ? "Uploading..." : "Submit Question"}
+              </button>
             </div>
           ))}
         </div>
