@@ -269,41 +269,54 @@ const handleEvaluateDifficulty = async (idx) => {
   };
 
   // Submit a single question (upload pasted diagram if any)
-  const handleCreateQuestion = async (idx) => {
-    const q = extractedQuestions[idx];
-    let diagramUrl = q.diagramPath;
+const handleCreateQuestion = async (idx) => {
+  const q = extractedQuestions[idx];
+  let diagramUrl = q.diagramPath;
 
-    // If a diagram was pasted, upload it now before submit
-    if (!diagramUrl && q.diagramFile) {
-      const formData = new FormData();
-      formData.append("file", q.diagramFile);
-      try {
-        setUploading(true);
-        const res = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/upload`, formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-        diagramUrl = res.data.url;
-      } catch (err) {
-        alert("Failed to upload pasted image");
-        setUploading(false);
-        return;
-      } finally {
-        setUploading(false);
-      }
-    }
-
+  if (!diagramUrl && q.diagramFile) {
+    const formData = new FormData();
+    formData.append("file", q.diagramFile);
     try {
-      await axios.post(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/chatper-wise-question`,
-        { ...q, diagramPath: diagramUrl }
-      );
-      alert(`Question ${idx + 1} created successfully.`);
-      setSubmittedCount(c => c + 1);
-      localStorage.setItem("mcq_submitted_count", (submittedCount + 1).toString());
-    } catch (error) {
-      alert("Error creating question: " + (error.response?.data?.message || ""));
+      setUploading(true);
+      const res = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/upload`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      diagramUrl = res.data.url;
+    } catch (err) {
+      alert("Failed to upload pasted image");
+      setUploading(false);
+      return;
+    } finally {
+      setUploading(false);
     }
-  };
+  }
+
+  try {
+    await axios.post(
+      `${process.env.NEXT_PUBLIC_API_BASE_URL}/chatper-wise-question`,
+      { ...q, diagramPath: diagramUrl }
+    );
+
+    alert(`Question ${idx + 1} created successfully.`);
+
+    // ✅ Mark question as submitted
+    setExtractedQuestions((prev) => {
+      const updated = [...prev];
+      updated[idx].submitted = true;
+      return updated;
+    });
+
+    // ✅ Update submitted count
+    setSubmittedCount((c) => {
+      const newCount = c + 1;
+      localStorage.setItem("mcq_submitted_count", newCount.toString());
+      return newCount;
+    });
+  } catch (error) {
+    alert("Error creating question: " + (error.response?.data?.message || ""));
+  }
+};
+
 
   // Step 1: PDF creation
   const handleCreatePdf = async () => {
@@ -617,12 +630,15 @@ const handleEvaluateDifficulty = async (idx) => {
               )}
 
               <button
-                className="bg-green-600 text-white px-4 py-2 rounded mt-4"
-                onClick={() => handleCreateQuestion(idx)}
-                disabled={uploading}
-              >
-                {uploading ? "Uploading..." : "Submit Question"}
-              </button>
+  className={`px-4 py-2 rounded mt-4 ${
+    q.submitted ? "bg-green-300 cursor-not-allowed" : "bg-green-600 text-white"
+  }`}
+  onClick={() => handleCreateQuestion(idx)}
+  disabled={uploading || q.submitted}
+>
+  {q.submitted ? "✅ Submitted" : uploading ? "Uploading..." : "Submit Question"}
+</button>
+
             </div>
           ))}
         </div>
