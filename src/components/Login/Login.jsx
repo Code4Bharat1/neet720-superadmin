@@ -237,8 +237,8 @@ const AdminManagement = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="bg-white shadow-sm border-gray-500 border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-10 border-b border-gray-500">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-4">
               <div className="flex-shrink-0">
@@ -249,6 +249,31 @@ const AdminManagement = () => {
                 <p className="text-sm text-gray-500">Manage admin accounts and permissions</p>
               </div>
             </div>
+            <div className="flex space-x-1 cursor-pointer">
+              <button
+                className={`flex items-center cursor-pointer space-x-2 px-2 rounded-lg font-semibold transition-all duration-200 ${
+                  mode === "add"
+                    ? " text-blue-600"
+                    : "text-gray-600 hover:text-blue-600"
+                }`}
+                onClick={() => setMode("add")}
+              >
+                <UserPlus className="w-5 h-5" />
+                <span>Add Admin</span>
+              </button>
+              |
+              <button
+                className={`flex items-center cursor-pointer space-x-2 px-2 rounded-lg font-semibold transition-all duration-200 ${
+                  mode === "remove"
+                    ? " text-red-600"
+                    : "text-gray-600 hover:text-red-600"
+                }`}
+                onClick={() => setMode("remove")}
+              >
+                <UserMinus className="w-5 h-5" />
+                <span>Remove Admin</span>
+              </button>
+            </div>
             <div className="hidden md:block">
               <Image
                 src="/nexcore-logo-pc.png"
@@ -258,40 +283,10 @@ const AdminManagement = () => {
                 className="object-contain"
               />
             </div>
-          </div>
+       
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Mode Toggle */}
-        <div className="flex justify-center mb-8">
-          <div className="bg-white rounded-xl p-1 shadow-lg border">
-            <div className="flex space-x-1">
-              <button
-                className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${
-                  mode === "add"
-                    ? "bg-blue-600 text-white shadow-md"
-                    : "text-gray-600 hover:text-blue-600 hover:bg-blue-50"
-                }`}
-                onClick={() => setMode("add")}
-              >
-                <UserPlus className="w-5 h-5" />
-                <span>Add Admin</span>
-              </button>
-              <button
-                className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${
-                  mode === "remove"
-                    ? "bg-red-600 text-white shadow-md"
-                    : "text-gray-600 hover:text-red-600 hover:bg-red-50"
-                }`}
-                onClick={() => setMode("remove")}
-              >
-                <UserMinus className="w-5 h-5" />
-                <span>Remove Admin</span>
-              </button>
-            </div>
-          </div>
-        </div>
 
         {mode === "add" ? (
           /* Add Admin Form */

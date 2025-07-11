@@ -36,7 +36,7 @@ const SuperAdminLogin = () => {
         {/* Logo */}
         <div className="flex justify-center mb-6">
           <Image
-            src="/nexcore-logo-pc.png"
+            src="/neet720_logo.jpg"
             alt="Nexcore Logo"
             width={200}
             height={100}
