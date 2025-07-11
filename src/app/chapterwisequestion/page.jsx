@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import axios from "axios";
 
 const Page = () => {
+
+  
   // PDF form state
   const [pdfForm, setPdfForm] = useState({
     chapterName: "",
@@ -19,6 +21,28 @@ const Page = () => {
     }
     return 0;
   });
+
+const [chapter, setChapter] = useState("");
+const [subject, setSubject] = useState("Physics");
+const [topics, setTopics] = useState([]);
+const [topicInput, setTopicInput] = useState("");
+const [showEdit, setShowEdit] = useState(true);
+
+useEffect(() => {
+  if (typeof window !== "undefined") {
+    const storedChapter = localStorage.getItem("mcq_chapter") || "";
+    const storedSubject = localStorage.getItem("mcq_subject") || "Physics";
+    const storedTopics = JSON.parse(localStorage.getItem("mcq_topics") || "[]");
+
+    setChapter(storedChapter);
+    setSubject(storedSubject);
+    setTopics(storedTopics);
+    setTopicInput(storedTopics.join("\n"));
+    setShowEdit(!(storedChapter && storedTopics.length > 0));
+  }
+}, []);
+
+  
 
   // MCQ Extraction state
   const [mcqImage, setMcqImage] = useState(null);
@@ -41,6 +65,22 @@ const Page = () => {
       }
     }
   };
+  
+
+
+  useEffect(() => {
+  const savedForm = JSON.parse(localStorage.getItem("pdf_form") || "{}");
+  setPdfForm({
+    chapterName: savedForm.chapterName || "",
+    subject: savedForm.subject || "",
+    topicTags: savedForm.topicTags || "",
+  });
+}, []);
+
+// Save to localStorage every time it changes
+useEffect(() => {
+  localStorage.setItem("pdf_form", JSON.stringify(pdfForm));
+}, [pdfForm]);
 
   // Handler for image upload (extract MCQs)
   const handleMcqImageChange = (e) => {
@@ -82,9 +122,10 @@ const Page = () => {
             evaluating: false,
             evaluated: false,
             pdfId: pdfId || "",
-            diagramPath: "", // will hold url (if uploaded) or local preview (if pasted)
-            diagramFile: null, // will hold File/Blob if pasted
-            diagramPreview: "", // for pasted image preview (object url or base64)
+            topic: "",        // For topic suggestion
+            diagramPath: "",
+            diagramFile: null,
+            diagramPreview: "",
           }))
         );
       } else {
@@ -122,101 +163,104 @@ const Page = () => {
     });
   };
 
-  // Evaluate difficulty for a question
-  const handleEvaluateDifficulty = async (idx) => {
-    const q = extractedQuestions[idx];
-    const mcqText =
-      `${q.question}\n` +
-      q.options
-        .map(
-          (opt, i) => `${String.fromCharCode(65 + i)}. ${opt.option_text}`
-        )
-        .join("\n");
-    try {
-      updateQuestionField(idx, "evaluating", true);
+  // Evaluate difficulty for a question and fetch topic/topic_id
+const handleEvaluateDifficulty = async (idx) => {
+  const q = extractedQuestions[idx];
+  const mcqText =
+    `${q.question}\n` +
+    q.options
+      .map((opt, i) => `${String.fromCharCode(65 + i)}. ${opt.option_text}`)
+      .join("\n");
 
-      const res = await axios.post("http://localhost:5000/api/assess-difficulty", {
-        mcq: mcqText,
-        chapter: pdfForm.chapterName,
-        topics: pdfForm.topicTags.split(",").map(tag => tag.trim()),
-        subject: pdfForm.subject,
-      });
+  try {
+    updateQuestionField(idx, "evaluating", true);
 
-      const { difficulty, answer, explanation } = res.data;
-      updateQuestionField(idx, "difficulty_level", difficulty);
-      updateQuestionField(idx, "solution", explanation);
-      updateQuestionField(
-        idx,
-        "options",
-        q.options.map((opt, i) => ({
-          ...opt,
-          is_correct: String.fromCharCode(65 + i) === (answer || "").toUpperCase(),
-        }))
-      );
-      updateQuestionField(idx, "evaluated", true);
-    } catch (error) {
-      alert("Failed to evaluate difficulty.");
-    } finally {
-      updateQuestionField(idx, "evaluating", false);
+    
+    const res = await axios.post(`http://127.0.0.1:5000/api/assess-difficulty`, {
+      mcq: mcqText,
+      chapter: chapter,
+      topics: topics,
+      subject: subject,
+    });
+
+    const { difficulty, answer, explanation, topic, topic_id } = res.data;
+    console.log(topic_id);
+
+    updateQuestionField(idx, "difficulty_level", difficulty === "easy" ? "simple" : difficulty);
+    updateQuestionField(idx, "solution", explanation);
+    updateQuestionField(
+      idx,
+      "options",
+      q.options.map((opt, i) => ({
+        ...opt,
+        is_correct: String.fromCharCode(65 + i) === (answer || "").toUpperCase(),
+      }))
+    );
+    updateQuestionField(idx, "evaluated", true);
+    updateQuestionField(idx, "topic", topic || "");
+    // updateQuestionField(idx, "topic_id", topic_id || "");
+    updateQuestionField(idx, "pdfId", topic_id || ""); // ✅ Treat topic_id as pdfId
+  } catch (error) {
+    alert("Failed to evaluate difficulty.");
+  } finally {
+    updateQuestionField(idx, "evaluating", false);
+  }
+};
+
+
+  // Paste handler (diagram): uploads immediately, sets diagramPath to AWS url
+  const handleDiagramPaste = async (e, idx) => {
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf("image") !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          const formData = new FormData();
+          formData.append("file", file);
+          try {
+            setUploading(true);
+            const res = await axios.post(
+              `${process.env.NEXT_PUBLIC_API_BASE_URL}/upload`,
+              formData,
+              {
+                headers: { "Content-Type": "multipart/form-data" },
+              }
+            );
+            const imageUrl = res.data.url;
+            updateQuestionField(idx, "diagramPath", imageUrl);
+          } catch (err) {
+            alert("Failed to upload pasted image");
+          } finally {
+            setUploading(false);
+          }
+          break;
+        }
+      }
     }
   };
 
-// Paste handler (diagram): uploads immediately, sets diagramPath to AWS url
-const handleDiagramPaste = async (e, idx) => {
-  const items = e.clipboardData.items;
-  for (let i = 0; i < items.length; i++) {
-    if (items[i].type.indexOf("image") !== -1) {
-      const file = items[i].getAsFile();
-      if (file) {
-        const formData = new FormData();
-        formData.append("file", file);
-        try {
-          setUploading(true);
-          const res = await axios.post(
-            `${process.env.NEXT_PUBLIC_API_BASE_URL}/upload`,
-            formData,
-            {
-              headers: { "Content-Type": "multipart/form-data" },
-            }
-          );
-          const imageUrl = res.data.url;
-          updateQuestionField(idx, "diagramPath", imageUrl);
-        } catch (err) {
-          alert("Failed to upload pasted image");
-        } finally {
-          setUploading(false);
+  const handleDiagramUpload = async (e, idx) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      setUploading(true);
+      const res = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/upload`,
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
         }
-        break;
-      }
+      );
+      const imageUrl = res.data.url;
+      updateQuestionField(idx, "diagramPath", imageUrl);
+    } catch (err) {
+      alert("Failed to upload image");
+    } finally {
+      setUploading(false);
     }
-  }
-};
-
-
-
- const handleDiagramUpload = async (e, idx) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const formData = new FormData();
-  formData.append("file", file);
-  try {
-    setUploading(true);
-    const res = await axios.post(
-      `${process.env.NEXT_PUBLIC_API_BASE_URL}/upload`,
-      formData,
-      {
-        headers: { "Content-Type": "multipart/form-data" },
-      }
-    );
-    const imageUrl = res.data.url;
-    updateQuestionField(idx, "diagramPath", imageUrl);
-  } catch (err) {
-    alert("Failed to upload image");
-  } finally {
-    setUploading(false);
-  }
-};
-
+  };
 
   const handleRemoveDiagram = (idx) => {
     updateQuestionField(idx, "diagramPath", "");
@@ -225,41 +269,54 @@ const handleDiagramPaste = async (e, idx) => {
   };
 
   // Submit a single question (upload pasted diagram if any)
-  const handleCreateQuestion = async (idx) => {
-    const q = extractedQuestions[idx];
-    let diagramUrl = q.diagramPath;
+const handleCreateQuestion = async (idx) => {
+  const q = extractedQuestions[idx];
+  let diagramUrl = q.diagramPath;
 
-    // If a diagram was pasted, upload it now before submit
-    if (!diagramUrl && q.diagramFile) {
-      const formData = new FormData();
-      formData.append("file", q.diagramFile);
-      try {
-        setUploading(true);
-        const res = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/upload`, formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-        diagramUrl = res.data.url;
-      } catch (err) {
-        alert("Failed to upload pasted image");
-        setUploading(false);
-        return;
-      } finally {
-        setUploading(false);
-      }
-    }
-
+  if (!diagramUrl && q.diagramFile) {
+    const formData = new FormData();
+    formData.append("file", q.diagramFile);
     try {
-      await axios.post(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/chatper-wise-question`,
-        { ...q, diagramPath: diagramUrl }
-      );
-      alert(`Question ${idx + 1} created successfully.`);
-      setSubmittedCount(c => c + 1);
-      localStorage.setItem("mcq_submitted_count", (submittedCount + 1).toString());
-    } catch (error) {
-      alert("Error creating question: " + (error.response?.data?.message || ""));
+      setUploading(true);
+      const res = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/upload`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      diagramUrl = res.data.url;
+    } catch (err) {
+      alert("Failed to upload pasted image");
+      setUploading(false);
+      return;
+    } finally {
+      setUploading(false);
     }
-  };
+  }
+
+  try {
+    await axios.post(
+      `${process.env.NEXT_PUBLIC_API_BASE_URL}/chatper-wise-question`,
+      { ...q, diagramPath: diagramUrl }
+    );
+
+    alert(`Question ${idx + 1} created successfully.`);
+
+    // ✅ Mark question as submitted
+    setExtractedQuestions((prev) => {
+      const updated = [...prev];
+      updated[idx].submitted = true;
+      return updated;
+    });
+
+    // ✅ Update submitted count
+    setSubmittedCount((c) => {
+      const newCount = c + 1;
+      localStorage.setItem("mcq_submitted_count", newCount.toString());
+      return newCount;
+    });
+  } catch (error) {
+    alert("Error creating question: " + (error.response?.data?.message || ""));
+  }
+};
+
 
   // Step 1: PDF creation
   const handleCreatePdf = async () => {
@@ -297,6 +354,87 @@ const handleDiagramPaste = async (e, idx) => {
       </button>
 
       
+        {/* Chapter/Topics/Subjects section */}
+<div className="border p-4 rounded shadow mb-4 bg-gray-50">
+  {showEdit ? (
+    <div>
+      <h2 className="font-semibold mb-2">Set Chapter, Topics, and Subject</h2>
+      <input
+        className="border p-2 w-full my-2"
+        placeholder="Chapter Name"
+        value={chapter}
+        onChange={(e) => setChapter(e.target.value)}
+      />
+      <input
+        className="border p-2 w-full my-2"
+        placeholder="Subject Name"
+        value={subject}
+        onChange={(e) => {
+          setSubject(e.target.value);
+          localStorage.setItem("mcq_subject", e.target.value);
+        }}
+      />
+      <textarea
+        className="border p-2 w-full my-2"
+        placeholder="Enter topics, one per line"
+        value={topicInput}
+        onChange={(e) => setTopicInput(e.target.value)}
+        rows={4}
+      />
+      <button
+        className="bg-blue-600 text-white px-4 py-2 rounded"
+        onClick={() => {
+          const topicsArr = topicInput
+            .split("\n")
+            .map((t) => t.trim())
+            .filter(Boolean);
+          setTopics(topicsArr);
+          setShowEdit(false);
+          localStorage.setItem("mcq_chapter", chapter);
+          localStorage.setItem("mcq_topics", JSON.stringify(topicsArr));
+        }}
+        disabled={!chapter || !topicInput.trim()}
+      >
+        Save
+      </button>
+    </div>
+  ) : (
+    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div>
+        <div>
+          <span className="font-semibold">Chapter:</span> {chapter}
+        </div>
+        <div>
+          <span className="font-semibold">Subject:</span> {subject}
+        </div>
+        <div>
+          <span className="font-semibold">Topics:</span>{" "}
+          {topics.map((t) => (
+            <span
+              key={t}
+              className="inline-block bg-blue-200 text-blue-800 px-2 py-1 m-1 rounded text-sm"
+            >
+              {t}
+            </span>
+          ))}
+        </div>
+      </div>
+      <button
+        className="bg-gray-600 text-white px-3 py-2 rounded"
+        onClick={() => {
+          setShowEdit(true);
+          setTopicInput(topics.join("\n"));
+        }}
+      >
+        Edit Chapter/Topics
+      </button>
+    </div>
+  )}
+</div>
+
+
+
+
 
       {/* MCQ Extraction and Question Forms */}
       <div className="border p-4 rounded shadow mb-6">
@@ -421,6 +559,25 @@ const handleDiagramPaste = async (e, idx) => {
                 }
               />
 
+              <h3 className="font-semibold mt-4">Topic Suggestion:</h3>
+              <input
+                placeholder="Topic (suggested, editable)"
+                className="block border p-2 my-2 w-full"
+                value={q.topic || ""}
+                onChange={(e) =>
+                  updateQuestionField(idx, "topic", e.target.value)
+                }
+              />
+
+              {/* <input
+                placeholder="Topic ID (auto-fetched, editable)"
+                className="block border p-2 my-2 w-full"
+                value={q.topic_id || ""}
+                onChange={(e) =>
+                  updateQuestionField(idx, "topic_id", e.target.value)
+                }
+              /> */}
+
               <h3 className="font-semibold mt-4">Paste or Upload Diagram:</h3>
               <div
                 tabIndex={0}
@@ -473,12 +630,15 @@ const handleDiagramPaste = async (e, idx) => {
               )}
 
               <button
-                className="bg-green-600 text-white px-4 py-2 rounded mt-4"
-                onClick={() => handleCreateQuestion(idx)}
-                disabled={uploading}
-              >
-                {uploading ? "Uploading..." : "Submit Question"}
-              </button>
+  className={`px-4 py-2 rounded mt-4 ${
+    q.submitted ? "bg-green-300 cursor-not-allowed" : "bg-green-600 text-white"
+  }`}
+  onClick={() => handleCreateQuestion(idx)}
+  disabled={uploading || q.submitted}
+>
+  {q.submitted ? "✅ Submitted" : uploading ? "Uploading..." : "Submit Question"}
+</button>
+
             </div>
           ))}
         </div>
