@@ -5,7 +5,32 @@ import axios from "axios";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import toast from "react-hot-toast";
-import { UserPlus, UserMinus, Mail, Phone, Calendar, MapPin, User, Shield, Upload, Palette, Eye, EyeOff, Trash2, CheckCircle, XCircle, Clock, Building, Key, MessageSquare, Search, Filter, Download, Settings, AlertTriangle } from 'lucide-react';
+import {
+  UserPlus,
+  UserMinus,
+  Mail,
+  Phone,
+  Calendar,
+  MapPin,
+  User,
+  Shield,
+  Upload,
+  Palette,
+  Eye,
+  EyeOff,
+  Trash2,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Building,
+  Key,
+  MessageSquare,
+  Search,
+  Filter,
+  Download,
+  Settings,
+  AlertTriangle,
+} from "lucide-react";
 
 const AdminManagement = () => {
   const [mode, setMode] = useState("add");
@@ -102,9 +127,9 @@ const AdminManagement = () => {
         toast.error("File size should be less than 5MB");
         return;
       }
-      
+
       setFormData({ ...formData, logo: file });
-      
+
       const reader = new FileReader();
       reader.onloadend = () => {
         setLogoPreview(reader.result);
@@ -121,10 +146,10 @@ const AdminManagement = () => {
     try {
       if (mode === "add") {
         const formDataToSend = new FormData();
-        
-        Object.keys(formData).forEach(key => {
-          if (key === 'logo' && formData[key]) {
-            formDataToSend.append('logo', formData[key]);
+
+        Object.keys(formData).forEach((key) => {
+          if (key === "logo" && formData[key]) {
+            formDataToSend.append("logo", formData[key]);
           } else if (formData[key] !== null && formData[key] !== undefined) {
             formDataToSend.append(key, formData[key]);
           }
@@ -135,7 +160,7 @@ const AdminManagement = () => {
           formDataToSend,
           {
             headers: {
-              'Content-Type': 'multipart/form-data',
+              "Content-Type": "multipart/form-data",
             },
           }
         );
@@ -201,7 +226,13 @@ const AdminManagement = () => {
     }
   };
 
-  const sendEmailToAdmin = async (email, adminId, password, startDate, expiryDate) => {
+  const sendEmailToAdmin = async (
+    email,
+    adminId,
+    password,
+    startDate,
+    expiryDate
+  ) => {
     try {
       const response = await axios.post(
         `${process.env.NEXT_PUBLIC_API_BASE_URL}/email`,
@@ -220,17 +251,20 @@ const AdminManagement = () => {
     }
   };
 
-  const filteredAdmins = adminList.filter(admin => {
-    const matchesSearch = admin.AdminId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         admin.Email?.toLowerCase().includes(searchTerm.toLowerCase());
-    
+  const filteredAdmins = adminList.filter((admin) => {
+    const matchesSearch =
+      admin.AdminId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      admin.Email?.toLowerCase().includes(searchTerm.toLowerCase());
+
     if (filterStatus === "all") return matchesSearch;
-    
-    const isActive = admin.ExpiryDate ? new Date(admin.ExpiryDate) > new Date() : false;
+
+    const isActive = admin.ExpiryDate
+      ? new Date(admin.ExpiryDate) > new Date()
+      : false;
     if (filterStatus === "active") return matchesSearch && isActive;
     if (filterStatus === "expired") return matchesSearch && !isActive;
     if (filterStatus === "null") return matchesSearch && !admin.ExpiryDate;
-    
+
     return matchesSearch;
   });
 
@@ -238,18 +272,22 @@ const AdminManagement = () => {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
       {/* Header */}
       <div className="bg-white shadow-sm border-gray-500 border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-10 border-b border-gray-500">
+        <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 mb-10 border-b border-gray-500 max-sm:pb-2">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-4">
               <div className="flex-shrink-0">
                 <Shield className="h-8 w-8 text-blue-600" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">Admin Management</h1>
-                <p className="text-sm text-gray-500">Manage admin accounts and permissions</p>
+                <h1 className="text-xl font-bold text-gray-900">
+                  Admin Management
+                </h1>
+                <p className="text-sm text-gray-500">
+                  Manage admin accounts and permissions
+                </p>
               </div>
             </div>
-            <div className="flex space-x-1 cursor-pointer">
+            <div className="flex space-x-1 cursor-pointer -ml-24">
               <button
                 className={`flex items-center cursor-pointer space-x-2 px-2 rounded-lg font-semibold transition-all duration-200 ${
                   mode === "add"
@@ -276,17 +314,15 @@ const AdminManagement = () => {
             </div>
             <div className="hidden md:block">
               <Image
-                src="/nexcore-logo-pc.png"
-                alt="Nexcore Logo"
-                width={120}
-                height={40}
-                className="object-contain"
+                src="/neet720_logo.jpg"
+                alt="Neet720 Logo"
+                width={60}
+                height={20} // give it more height
+                className="object-fit" // use Tailwind instead of inline style
               />
             </div>
-       
+          </div>
         </div>
-      </div>
-
 
         {mode === "add" ? (
           /* Add Admin Form */
@@ -297,7 +333,9 @@ const AdminManagement = () => {
                   <UserPlus className="w-7 h-7 mr-3" />
                   Create New Admin Account
                 </h2>
-                <p className="text-blue-100 mt-2">Fill in the details to create a new admin account</p>
+                <p className="text-blue-100 mt-2">
+                  Fill in the details to create a new admin account
+                </p>
               </div>
 
               <form onSubmit={handleSubmit} className="p-8">
@@ -347,7 +385,11 @@ const AdminManagement = () => {
                           onClick={() => setShowPassword(!showPassword)}
                           className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
                         >
-                          {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                          {showPassword ? (
+                            <EyeOff className="w-5 h-5" />
+                          ) : (
+                            <Eye className="w-5 h-5" />
+                          )}
                         </button>
                       </div>
                     </div>
@@ -532,9 +574,14 @@ const AdminManagement = () => {
                           <div className="flex flex-col items-center justify-center pt-5 pb-6">
                             <Upload className="w-8 h-8 mb-2 text-gray-400" />
                             <p className="mb-2 text-sm text-gray-500">
-                              <span className="font-semibold">Click to upload</span> or drag and drop
+                              <span className="font-semibold">
+                                Click to upload
+                              </span>{" "}
+                              or drag and drop
                             </p>
-                            <p className="text-xs text-gray-500">PNG, JPG, JPEG (MAX. 5MB)</p>
+                            <p className="text-xs text-gray-500">
+                              PNG, JPG, JPEG (MAX. 5MB)
+                            </p>
                           </div>
                           <input
                             type="file"
@@ -545,7 +592,11 @@ const AdminManagement = () => {
                         </label>
                         {logoPreview && (
                           <div className="w-24 h-24 border rounded-lg overflow-hidden bg-gray-50 flex items-center justify-center">
-                            <img src={logoPreview || "/placeholder.svg"} alt="Logo preview" className="max-w-full max-h-full object-contain" />
+                            <img
+                              src={logoPreview || "/placeholder.svg"}
+                              alt="Logo preview"
+                              className="max-w-full max-h-full object-contain"
+                            />
                           </div>
                         )}
                       </div>
@@ -557,44 +608,62 @@ const AdminManagement = () => {
                         <Palette className="w-4 h-4 mr-1" />
                         Theme Colors
                       </h4>
-                      
+
                       {/* Navbar Color */}
                       <div className="flex items-center space-x-4">
-                        <label className="text-sm font-medium text-gray-700 w-24">Navbar:</label>
+                        <label className="text-sm font-medium text-gray-700 w-24">
+                          Navbar:
+                        </label>
                         <input
                           type="color"
                           name="navbarColor"
                           value={formData.navbarColor}
-                          onChange={(e) => handleColorChange('navbarColor', e.target.value)}
+                          onChange={(e) =>
+                            handleColorChange("navbarColor", e.target.value)
+                          }
                           className="w-12 h-12 rounded-lg cursor-pointer border border-gray-300"
                         />
-                        <span className="text-sm text-gray-600 font-mono">{formData.navbarColor}</span>
+                        <span className="text-sm text-gray-600 font-mono">
+                          {formData.navbarColor}
+                        </span>
                       </div>
 
                       {/* Sidebar Color */}
                       <div className="flex items-center space-x-4">
-                        <label className="text-sm font-medium text-gray-700 w-24">Sidebar:</label>
+                        <label className="text-sm font-medium text-gray-700 w-24">
+                          Sidebar:
+                        </label>
                         <input
                           type="color"
                           name="sidebarColor"
                           value={formData.sidebarColor}
-                          onChange={(e) => handleColorChange('sidebarColor', e.target.value)}
+                          onChange={(e) =>
+                            handleColorChange("sidebarColor", e.target.value)
+                          }
                           className="w-12 h-12 rounded-lg cursor-pointer border border-gray-300"
                         />
-                        <span className="text-sm text-gray-600 font-mono">{formData.sidebarColor}</span>
+                        <span className="text-sm text-gray-600 font-mono">
+                          {formData.sidebarColor}
+                        </span>
                       </div>
 
                       {/* Text Color */}
                       <div className="flex items-center space-x-4">
-                        <label className="text-sm font-medium text-gray-700 w-24">Text:</label>
+                        <label className="text-sm font-medium text-gray-700 w-24">
+                          Text:
+                        </label>
                         <input
                           type="color"
                           name="textColor"
                           value={formData.textColor}
-                          onChange={(e) => handleColorChange('textColor', e.target.value)}
+                          onChange={(e) =>
+                            handleColorChange("textColor", e.target.value)
+                          }
                           className="w-12 h-12 rounded-lg cursor-pointer border border-gray-300"
                         />
-                        <span className="text-sm text-gray-600 font-mono">{formData.textColor}</span>
+                        <span className="text-sm text-gray-600 font-mono">
+                          {formData.textColor}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -633,7 +702,9 @@ const AdminManagement = () => {
                   <UserMinus className="w-7 h-7 mr-3" />
                   Remove Admin Account
                 </h2>
-                <p className="text-red-100 mt-2">Permanently remove an admin account from the system</p>
+                <p className="text-red-100 mt-2">
+                  Permanently remove an admin account from the system
+                </p>
               </div>
 
               <form onSubmit={handleSubmit} className="p-8">
@@ -702,9 +773,11 @@ const AdminManagement = () => {
                       <User className="w-6 h-6 mr-2 text-blue-600" />
                       Admin Status Overview
                     </h3>
-                    <p className="text-gray-600 mt-1">Monitor and manage all admin accounts</p>
+                    <p className="text-gray-600 mt-1">
+                      Monitor and manage all admin accounts
+                    </p>
                   </div>
-                  
+
                   <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
                     {/* Search */}
                     <div className="relative">
@@ -717,7 +790,7 @@ const AdminManagement = () => {
                         className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     </div>
-                    
+
                     {/* Filter */}
                     <div className="relative">
                       <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -759,7 +832,10 @@ const AdminManagement = () => {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {filteredAdmins.map((admin, index) => (
-                      <tr key={index} className="hover:bg-gray-50 transition-colors">
+                      <tr
+                        key={index}
+                        className="hover:bg-gray-50 transition-colors"
+                      >
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                           {index + 1}
                         </td>
@@ -806,8 +882,12 @@ const AdminManagement = () => {
                         <td colSpan="5" className="px-6 py-12 text-center">
                           <div className="flex flex-col items-center">
                             <User className="w-12 h-12 text-gray-300 mb-4" />
-                            <p className="text-gray-500 text-lg font-medium">No admins found</p>
-                            <p className="text-gray-400 text-sm">Try adjusting your search or filter criteria</p>
+                            <p className="text-gray-500 text-lg font-medium">
+                              No admins found
+                            </p>
+                            <p className="text-gray-400 text-sm">
+                              Try adjusting your search or filter criteria
+                            </p>
                           </div>
                         </td>
                       </tr>
@@ -820,8 +900,12 @@ const AdminManagement = () => {
                 <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
                   <div className="flex items-center justify-between">
                     <p className="text-sm text-gray-700">
-                      Showing <span className="font-medium">{filteredAdmins.length}</span> of{" "}
-                      <span className="font-medium">{adminList.length}</span> admins
+                      Showing{" "}
+                      <span className="font-medium">
+                        {filteredAdmins.length}
+                      </span>{" "}
+                      of <span className="font-medium">{adminList.length}</span>{" "}
+                      admins
                     </p>
                     <button className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors">
                       <Download className="w-4 h-4 mr-2" />
