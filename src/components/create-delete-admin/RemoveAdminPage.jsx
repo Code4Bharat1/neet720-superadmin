@@ -13,7 +13,6 @@ import {
   AlertTriangle,
   Search,
   Filter,
-  Download,
   CheckCircle,
   XCircle,
   Clock,
@@ -35,6 +34,7 @@ export default function RemoveAdminPage() {
       const res = await axios.get(
         `${process.env.NEXT_PUBLIC_API_BASE_URL}/superadmin/getadminlist`
       );
+      // Expect each admin to include: id, AdminId, Email, ExpiryDate, created_by_admin_id, role, name, mobileNumber
       setAdminList(res.data.admins || []);
     } catch (err) {
       toast.error("Failed to load admin list");
@@ -105,23 +105,32 @@ export default function RemoveAdminPage() {
     );
   };
 
+  // Map: id -> admin (to resolve created_by_admin_id -> creator)
+  const idToAdmin = useMemo(() => {
+    const m = new Map();
+    (adminList || []).forEach((a) => m.set(a.id, a));
+    return m;
+  }, [adminList]);
+
   const filteredAdmins = useMemo(() => {
     return (adminList || []).filter((admin) => {
       const matchesSearch =
         admin.AdminId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         admin.Email?.toLowerCase().includes(searchTerm.toLowerCase());
 
-      if (filterStatus === "all") return matchesSearch;
-
       const isActive = admin.ExpiryDate
         ? new Date(admin.ExpiryDate) > new Date()
         : false;
 
-      if (filterStatus === "active") return matchesSearch && isActive;
-      if (filterStatus === "expired") return matchesSearch && !isActive;
-      if (filterStatus === "null") return matchesSearch && !admin.ExpiryDate;
+      // status filter
+      let statusPass = true;
+      if (filterStatus === "active") statusPass = isActive;
+      else if (filterStatus === "expired") statusPass = !isActive;
+      else if (filterStatus === "null") statusPass = !admin.ExpiryDate;
+      else if (filterStatus === "sub") statusPass = admin.created_by_admin_id != null;
+      else if (filterStatus === "roots") statusPass = admin.created_by_admin_id == null;
 
-      return matchesSearch;
+      return matchesSearch && statusPass;
     });
   }, [adminList, searchTerm, filterStatus]);
 
@@ -165,7 +174,6 @@ export default function RemoveAdminPage() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        
         {/* Remove Form */}
         <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl border border-gray-200/50 overflow-hidden">
           <div className="bg-gradient-to-r from-red-600 via-red-700 to-pink-700 px-8 py-8">
@@ -288,6 +296,8 @@ export default function RemoveAdminPage() {
                     <option value="active">Active Only</option>
                     <option value="expired">Expired Only</option>
                     <option value="null">No Expiry Set</option>
+                    <option value="sub">Sub-admins Only</option>
+                    <option value="roots">Top-level Only</option>
                   </select>
                 </div>
               </div>
@@ -309,6 +319,9 @@ export default function RemoveAdminPage() {
                     Contact Information
                   </th>
                   <th className="px-6 py-5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
+                    Created By
+                  </th>
+                  <th className="px-6 py-5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
                     Status
                   </th>
                   <th className="px-6 py-5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
@@ -317,81 +330,110 @@ export default function RemoveAdminPage() {
                 </tr>
               </thead>
               <tbody className="bg-white/50 divide-y divide-gray-200">
-                {filteredAdmins.map((admin, index) => (
-                  <tr key={index} className="hover:bg-blue-50/50 transition-all duration-200">
-                    <td className="px-6 py-5 whitespace-nowrap">
-                      <div className="text-sm font-bold text-gray-900 bg-gray-100 rounded-lg px-3 py-1 inline-block">
-                        #{index + 1}
-                      </div>
-                    </td>
-                    <td className="px-6 py-5 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0 h-12 w-12">
-                          <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center shadow-sm">
-                            <User className="h-6 w-6 text-blue-600" />
+                {filteredAdmins.map((admin, index) => {
+                  const creator =
+                    admin.created_by_admin_id != null
+                      ? idToAdmin.get(admin.created_by_admin_id)
+                      : null;
+
+                  return (
+                    <tr key={index} className="hover:bg-blue-50/50 transition-all duration-200">
+                      <td className="px-6 py-5 whitespace-nowrap">
+                        <div className="text-sm font-bold text-gray-900 bg-gray-100 rounded-lg px-3 py-1 inline-block">
+                          #{index + 1}
+                        </div>
+                      </td>
+
+                      <td className="px-6 py-5 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0 h-12 w-12">
+                            <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center shadow-sm">
+                              <User className="h-6 w-6 text-blue-600" />
+                            </div>
+                          </div>
+                          <div className="ml-4">
+                            <div className="text-sm font-bold text-gray-900">
+                              {admin.AdminId || "-"}
+                            </div>
+                            <div className="text-sm text-gray-600 font-medium">
+                              {admin.name || "N/A"}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              Role: {admin.role || "admin"}
+                            </div>
                           </div>
                         </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-bold text-gray-900">
-                            {admin.AdminId || "-"}
+                      </td>
+
+                      <td className="px-6 py-5 whitespace-nowrap">
+                        <div className="space-y-1">
+                          <div className="text-sm text-gray-900 flex items-center">
+                            <Mail className="w-4 h-4 mr-2 text-gray-400" />
+                            {admin.Email || "-"}
                           </div>
-                          <div className="text-sm text-gray-600 font-medium">
-                            {admin.name || "N/A"}
-                          </div>
-                          <div className="text-xs text-gray-500 mt-1">
-                            Role: {admin.role || "admin"}
-                          </div>
+                          {admin.mobileNumber && (
+                            <div className="text-xs text-gray-600">
+                              📱 {admin.mobileNumber}
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-5 whitespace-nowrap">
-                      <div className="space-y-1">
-                        <div className="text-sm text-gray-900 flex items-center">
-                          <Mail className="w-4 h-4 mr-2 text-gray-400" />
-                          {admin.Email || "-"}
-                        </div>
-                        {admin.mobileNumber && (
-                          <div className="text-xs text-gray-600">
-                            📱 {admin.mobileNumber}
+                      </td>
+
+                      {/* Created By */}
+                      <td className="px-6 py-5 whitespace-nowrap">
+                        {creator ? (
+                          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-xs font-semibold">
+                            <Shield className="w-3.5 h-3.5" />
+                            by {creator.AdminId}
+                            <span className="text-gray-500 font-medium">#{creator.id}</span>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 text-sm">—</span>
+                        )}
+                      </td>
+
+                      <td className="px-6 py-5 whitespace-nowrap">
+                        {getStatusTag(admin.ExpiryDate)}
+                      </td>
+
+                      <td className="px-6 py-5 whitespace-nowrap">
+                        {admin.ExpiryDate ? (
+                          <div className="flex items-center space-x-2">
+                            <Calendar className="w-4 h-4 text-gray-400" />
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">
+                                {new Date(admin.ExpiryDate).toLocaleDateString()}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {Math.ceil(
+                                  (new Date(admin.ExpiryDate) - new Date()) /
+                                    (1000 * 60 * 60 * 24)
+                                )}{" "}
+                                days
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center">
+                            <Clock className="w-4 h-4 text-gray-400 mr-2" />
+                            <span className="text-gray-500 font-medium">No expiry set</span>
                           </div>
                         )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-5 whitespace-nowrap">
-                      {getStatusTag(admin.ExpiryDate)}
-                    </td>
-                    <td className="px-6 py-5 whitespace-nowrap">
-                      {admin.ExpiryDate ? (
-                        <div className="flex items-center space-x-2">
-                          <Calendar className="w-4 h-4 text-gray-400" />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {new Date(admin.ExpiryDate).toLocaleDateString()}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {Math.ceil((new Date(admin.ExpiryDate) - new Date()) / (1000 * 60 * 60 * 24))} days
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-center">
-                          <Clock className="w-4 h-4 text-gray-400 mr-2" />
-                          <span className="text-gray-500 font-medium">No expiry set</span>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  );
+                })}
+
                 {filteredAdmins.length === 0 && (
                   <tr>
-                    <td colSpan="5" className="px-6 py-16 text-center">
+                    <td colSpan="6" className="px-6 py-16 text-center">
                       <div className="flex flex-col items-center">
                         <div className="p-6 bg-gray-100 rounded-full mb-4">
                           <User className="w-12 h-12 text-gray-400" />
                         </div>
                         <p className="text-gray-600 text-xl font-bold mb-2">No admins found</p>
                         <p className="text-gray-500 text-sm max-w-md">
-                          No admins match your current search criteria. Try adjusting your search terms or filter settings.
+                          No admins match your current search or filter criteria. Try adjusting them.
                         </p>
                       </div>
                     </td>
