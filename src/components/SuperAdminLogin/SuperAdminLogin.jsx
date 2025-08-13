@@ -23,7 +23,7 @@ const SuperAdminLogin = () => {
     if (superId === "rishi" && password === "rishi") {
       toast.success("Login Successful 🎉");
       setTimeout(() => {
-        router.push("/login");
+        router.push("/add-admin");
       }, 1000); // delay slightly to show toast
     } else {
       toast.error("Invalid Super ID or Password ❌");
