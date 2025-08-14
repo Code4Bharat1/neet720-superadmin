@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import Image from "next/image";
 import toast from "react-hot-toast";
+import { Pencil } from "lucide-react";
 import {
   UserMinus,
   User,
@@ -127,8 +128,10 @@ export default function RemoveAdminPage() {
       if (filterStatus === "active") statusPass = isActive;
       else if (filterStatus === "expired") statusPass = !isActive;
       else if (filterStatus === "null") statusPass = !admin.ExpiryDate;
-      else if (filterStatus === "sub") statusPass = admin.created_by_admin_id != null;
-      else if (filterStatus === "roots") statusPass = admin.created_by_admin_id == null;
+      else if (filterStatus === "sub")
+        statusPass = admin.created_by_admin_id != null;
+      else if (filterStatus === "roots")
+        statusPass = admin.created_by_admin_id == null;
 
       return matchesSearch && statusPass;
     });
@@ -145,8 +148,12 @@ export default function RemoveAdminPage() {
                 <Shield className="h-6 w-6 text-red-600" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">Remove Admin</h1>
-                <p className="text-sm text-gray-500">Permanently remove an admin account</p>
+                <h1 className="text-xl font-bold text-gray-900">
+                  Remove Admin
+                </h1>
+                <p className="text-sm text-gray-500">
+                  Permanently remove an admin account
+                </p>
               </div>
             </div>
 
@@ -210,7 +217,9 @@ export default function RemoveAdminPage() {
                     className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200 bg-gray-50/50 hover:bg-white"
                     placeholder="Enter admin ID to remove"
                   />
-                  <p className="text-xs text-gray-500 mt-2">This action cannot be undone</p>
+                  <p className="text-xs text-gray-500 mt-2">
+                    This action cannot be undone
+                  </p>
                 </div>
               </div>
 
@@ -267,7 +276,8 @@ export default function RemoveAdminPage() {
                   Admin Status Overview
                 </h3>
                 <p className="text-gray-600 mt-2 text-lg">
-                  Monitor and manage all admin accounts ({adminList.length} total)
+                  Monitor and manage all admin accounts ({adminList.length}{" "}
+                  total)
                 </p>
               </div>
 
@@ -327,6 +337,9 @@ export default function RemoveAdminPage() {
                   <th className="px-6 py-5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
                     Expiry Date
                   </th>
+                  <th className="px-6 py-5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white/50 divide-y divide-gray-200">
@@ -337,7 +350,10 @@ export default function RemoveAdminPage() {
                       : null;
 
                   return (
-                    <tr key={index} className="hover:bg-blue-50/50 transition-all duration-200">
+                    <tr
+                      key={index}
+                      className="hover:bg-blue-50/50 transition-all duration-200"
+                    >
                       <td className="px-6 py-5 whitespace-nowrap">
                         <div className="text-sm font-bold text-gray-900 bg-gray-100 rounded-lg px-3 py-1 inline-block">
                           #{index + 1}
@@ -385,7 +401,9 @@ export default function RemoveAdminPage() {
                           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-xs font-semibold">
                             <Shield className="w-3.5 h-3.5" />
                             by {creator.AdminId}
-                            <span className="text-gray-500 font-medium">#{creator.id}</span>
+                            <span className="text-gray-500 font-medium">
+                              #{creator.id}
+                            </span>
                           </div>
                         ) : (
                           <span className="text-gray-400 text-sm">—</span>
@@ -402,7 +420,9 @@ export default function RemoveAdminPage() {
                             <Calendar className="w-4 h-4 text-gray-400" />
                             <div>
                               <div className="text-sm font-medium text-gray-900">
-                                {new Date(admin.ExpiryDate).toLocaleDateString()}
+                                {new Date(
+                                  admin.ExpiryDate
+                                ).toLocaleDateString()}
                               </div>
                               <div className="text-xs text-gray-500">
                                 {Math.ceil(
@@ -416,9 +436,20 @@ export default function RemoveAdminPage() {
                         ) : (
                           <div className="flex items-center">
                             <Clock className="w-4 h-4 text-gray-400 mr-2" />
-                            <span className="text-gray-500 font-medium">No expiry set</span>
+                            <span className="text-gray-500 font-medium">
+                              No expiry set
+                            </span>
                           </div>
                         )}
+                      </td>
+                      <td className="px-6 py-5 whitespace-nowrap">
+                        <Link
+                          href={`/edit-admin/${admin.id}`} // route to edit page with AdminId
+                          className="inline-flex items-center px-3 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-sm font-medium transition-all duration-200"
+                        >
+                          <Pencil className="w-4 h-4 mr-2" />
+                          Edit
+                        </Link>
                       </td>
                     </tr>
                   );
@@ -431,9 +462,12 @@ export default function RemoveAdminPage() {
                         <div className="p-6 bg-gray-100 rounded-full mb-4">
                           <User className="w-12 h-12 text-gray-400" />
                         </div>
-                        <p className="text-gray-600 text-xl font-bold mb-2">No admins found</p>
+                        <p className="text-gray-600 text-xl font-bold mb-2">
+                          No admins found
+                        </p>
                         <p className="text-gray-500 text-sm max-w-md">
-                          No admins match your current search or filter criteria. Try adjusting them.
+                          No admins match your current search or filter
+                          criteria. Try adjusting them.
                         </p>
                       </div>
                     </td>
@@ -452,7 +486,9 @@ export default function RemoveAdminPage() {
                 <AlertTriangle className="w-6 h-6 text-red-600" />
               </div>
               <div>
-                <h4 className="text-red-800 font-bold text-lg">Error Occurred</h4>
+                <h4 className="text-red-800 font-bold text-lg">
+                  Error Occurred
+                </h4>
                 <p className="text-red-700 mt-1">{error}</p>
               </div>
             </div>
