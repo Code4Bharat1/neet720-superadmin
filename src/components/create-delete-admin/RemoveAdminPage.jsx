@@ -38,8 +38,8 @@ export default function RemoveAdminPage() {
   useEffect(() => {
     if (typeof window !== "undefined") {
       const token =
-        localStorage.getItem("adminAuthToken") ||
-        sessionStorage.getItem("adminAuthToken");
+        localStorage.getItem("superadmin_token") ||
+        sessionStorage.getItem("superadmin_token");
 
       if (!token) {
         // Redirect to login if token is missing
