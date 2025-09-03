@@ -102,7 +102,7 @@ useEffect(() => {
       formData.append("image", mcqImage);
 
       const res = await axios.post(
-        "http://localhost:5000/api/extract-mcqs",
+        "http://localhost:6004/api/extract-mcqs",
         formData,
         {
           headers: { "Content-Type": "multipart/form-data" },

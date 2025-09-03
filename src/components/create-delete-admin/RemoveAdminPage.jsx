@@ -5,6 +5,7 @@ import axios from "axios";
 import Image from "next/image";
 import toast from "react-hot-toast";
 import { Pencil } from "lucide-react";
+import { useRouter } from "next/navigation";
 import {
   UserMinus,
   User,
@@ -23,19 +24,36 @@ import {
 import Link from "next/link";
 
 export default function RemoveAdminPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [deleteData, setDeleteData] = useState({ AdminId: "", reason: "" });
+  const [deletingAdminId, setDeletingAdminId] = useState(null);
   const [adminList, setAdminList] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [error, setError] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedAdmin, setSelectedAdmin] = useState(null);
+  const [deleteReason, setDeleteReason] = useState("");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const token =
+        localStorage.getItem("adminAuthToken") ||
+        sessionStorage.getItem("adminAuthToken");
+
+      if (!token) {
+        // Redirect to login if token is missing
+        router.push("/"); // change this to your login route
+      }
+    }
+  }, [router]);
 
   const fetchAdminList = async () => {
     try {
       const res = await axios.get(
         `${process.env.NEXT_PUBLIC_API_BASE_URL}/superadmin/getadminlist`
       );
-      // Expect each admin to include: id, AdminId, Email, ExpiryDate, created_by_admin_id, role, name, mobileNumber
+      console.log(res.data);
       setAdminList(res.data.admins || []);
     } catch (err) {
       toast.error("Failed to load admin list");
@@ -46,31 +64,33 @@ export default function RemoveAdminPage() {
     fetchAdminList();
   }, []);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setDeleteData((s) => ({ ...s, [name]: value }));
+  const handleDeleteClick = (admin) => {
+    setSelectedAdmin(admin);
+    setShowDeleteModal(true);
+    setDeleteReason("");
   };
 
-  const handleDelete = async (e) => {
-    e.preventDefault();
-    if (!deleteData.AdminId) return;
+  const handleDeleteConfirm = async () => {
+    if (!selectedAdmin || !deleteReason.trim()) {
+      toast.error("Please provide a reason for deletion");
+      return;
+    }
 
-    const confirmed = window.confirm(
-      `Are you sure you want to delete admin with ID: ${deleteData.AdminId}?`
-    );
-    if (!confirmed) return;
-
-    setLoading(true);
+    setDeletingAdminId(selectedAdmin.AdminId);
     setError(null);
 
     try {
       await axios.post(
         `${process.env.NEXT_PUBLIC_API_BASE_URL}/superadmin/deleteadmin`,
-        { AdminId: deleteData.AdminId, reason: deleteData.reason }
+        { AdminId: selectedAdmin.AdminId, reason: deleteReason }
       );
 
-      toast.success("Admin Removed Successfully ✅", { duration: 5000 });
-      setDeleteData({ AdminId: "", reason: "" });
+      toast.success(`Admin ${selectedAdmin.AdminId} removed successfully ✅`, {
+        duration: 5000,
+      });
+      setShowDeleteModal(false);
+      setSelectedAdmin(null);
+      setDeleteReason("");
       fetchAdminList();
     } catch (err) {
       toast.error(err.response?.data?.message || "Something went wrong.", {
@@ -78,7 +98,7 @@ export default function RemoveAdminPage() {
       });
       setError(err.response?.data?.message || "Something went wrong.");
     } finally {
-      setLoading(false);
+      setDeletingAdminId(null);
     }
   };
 
@@ -152,7 +172,7 @@ export default function RemoveAdminPage() {
                   Remove Admin
                 </h1>
                 <p className="text-sm text-gray-500">
-                  Permanently remove an admin account
+                  Manage and remove admin accounts
                 </p>
               </div>
             </div>
@@ -181,89 +201,6 @@ export default function RemoveAdminPage() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        {/* Remove Form */}
-        <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl border border-gray-200/50 overflow-hidden">
-          <div className="bg-gradient-to-r from-red-600 via-red-700 to-pink-700 px-8 py-8">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-3xl font-bold text-white flex items-center">
-                  <UserMinus className="w-8 h-8 mr-3" />
-                  Remove Admin Account
-                </h2>
-                <p className="text-red-100 mt-2 text-lg">
-                  Enter Admin ID and reason to permanently remove an admin
-                </p>
-              </div>
-              <div className="hidden sm:block p-4 bg-white/10 rounded-2xl">
-                <Trash2 className="w-12 h-12 text-white/80" />
-              </div>
-            </div>
-          </div>
-
-          <form onSubmit={handleDelete} className="p-8">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-3">
-                    <Shield className="w-4 h-4 inline mr-2 text-red-600" />
-                    Admin ID to Remove
-                  </label>
-                  <input
-                    type="text"
-                    name="AdminId"
-                    value={deleteData.AdminId}
-                    onChange={handleChange}
-                    required
-                    className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200 bg-gray-50/50 hover:bg-white"
-                    placeholder="Enter admin ID to remove"
-                  />
-                  <p className="text-xs text-gray-500 mt-2">
-                    This action cannot be undone
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-3">
-                    <AlertTriangle className="w-4 h-4 inline mr-2 text-red-600" />
-                    Reason for Removal
-                  </label>
-                  <textarea
-                    name="reason"
-                    value={deleteData.reason}
-                    onChange={handleChange}
-                    required
-                    rows={4}
-                    className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200 resize-none bg-gray-50/50 hover:bg-white"
-                    placeholder="Provide a detailed reason for removing this admin"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-8 pt-6 border-t border-gray-200">
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-gradient-to-r from-red-600 via-red-700 to-pink-700 hover:from-red-700 hover:via-red-800 hover:to-pink-800 text-white font-bold py-5 px-8 rounded-2xl focus:ring-4 focus:ring-red-200 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-3 text-lg shadow-xl hover:shadow-2xl"
-              >
-                {loading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-                    <span>Removing Admin...</span>
-                  </>
-                ) : (
-                  <>
-                    <UserMinus className="w-6 h-6" />
-                    <span>Remove Admin Account</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </form>
-        </div>
-
         {/* Admin List */}
         <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl border border-gray-200/50 overflow-hidden">
           <div className="bg-gradient-to-r from-slate-50 to-blue-50 px-8 py-8 border-b border-gray-200/60">
@@ -273,10 +210,10 @@ export default function RemoveAdminPage() {
                   <div className="p-2 bg-blue-100 rounded-lg mr-3">
                     <User className="w-6 h-6 text-blue-600" />
                   </div>
-                  Admin Status Overview
+                  Admin Management
                 </h3>
                 <p className="text-gray-600 mt-2 text-lg">
-                  Monitor and manage all admin accounts ({adminList.length}{" "}
+                  View, edit, and remove admin accounts ({adminList.length}{" "}
                   total)
                 </p>
               </div>
@@ -442,14 +379,34 @@ export default function RemoveAdminPage() {
                           </div>
                         )}
                       </td>
+
                       <td className="px-6 py-5 whitespace-nowrap">
-                        <Link
-                          href={`/edit-admin/${admin.id}`} // route to edit page with AdminId
-                          className="inline-flex items-center px-3 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-sm font-medium transition-all duration-200"
-                        >
-                          <Pencil className="w-4 h-4 mr-2" />
-                          Edit
-                        </Link>
+                        <div className="flex items-center space-x-2">
+                          <Link
+                            href={`/edit-admin/${admin.id}`}
+                            className="inline-flex items-center px-3 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-sm font-medium transition-all duration-200"
+                          >
+                            <Pencil className="w-4 h-4 mr-2" />
+                            Edit
+                          </Link>
+                          <button
+                            onClick={() => handleDeleteClick(admin)}
+                            disabled={deletingAdminId === admin.AdminId}
+                            className="inline-flex items-center px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {deletingAdminId === admin.AdminId ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-700 mr-2"></div>
+                                Deleting...
+                              </>
+                            ) : (
+                              <>
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Delete
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -457,7 +414,7 @@ export default function RemoveAdminPage() {
 
                 {filteredAdmins.length === 0 && (
                   <tr>
-                    <td colSpan="6" className="px-6 py-16 text-center">
+                    <td colSpan="7" className="px-6 py-16 text-center">
                       <div className="flex flex-col items-center">
                         <div className="p-6 bg-gray-100 rounded-full mb-4">
                           <User className="w-12 h-12 text-gray-400" />
@@ -495,6 +452,95 @@ export default function RemoveAdminPage() {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && selectedAdmin && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="bg-gradient-to-r from-red-600 via-red-700 to-pink-700 px-6 py-6">
+              <div className="flex items-center">
+                <div className="p-3 bg-white/20 rounded-xl mr-4">
+                  <AlertTriangle className="w-8 h-8 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-white">
+                    Confirm Deletion
+                  </h3>
+                  <p className="text-red-100 mt-1">
+                    This action cannot be undone
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6">
+              <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4">
+                <div className="flex items-center mb-3">
+                  <User className="w-5 h-5 text-red-600 mr-2" />
+                  <span className="font-bold text-red-800">
+                    Admin to Delete:
+                  </span>
+                </div>
+                <div className="space-y-1 text-sm">
+                  <p>
+                    <strong>ID:</strong> {selectedAdmin.AdminId}
+                  </p>
+                  <p>
+                    <strong>Name:</strong> {selectedAdmin.name}
+                  </p>
+                  <p>
+                    <strong>Email:</strong> {selectedAdmin.Email}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  <AlertTriangle className="w-4 h-4 inline mr-2 text-red-600" />
+                  Reason for Removal (Required)
+                </label>
+                <textarea
+                  value={deleteReason}
+                  onChange={(e) => setDeleteReason(e.target.value)}
+                  rows={3}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200 resize-none"
+                  placeholder="Provide a detailed reason for removing this admin..."
+                />
+              </div>
+            </div>
+
+            <div className="bg-gray-50 px-6 py-4 flex space-x-3">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setSelectedAdmin(null);
+                  setDeleteReason("");
+                }}
+                className="flex-1 px-4 py-3 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-xl font-medium transition-all duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                disabled={!deleteReason.trim() || deletingAdminId}
+                className="flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              >
+                {deletingAdminId ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete Admin
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

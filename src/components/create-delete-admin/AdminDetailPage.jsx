@@ -57,6 +57,19 @@ export default function AdminDetailsPage() {
 
   const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const token =
+        localStorage.getItem("adminAuthToken") ||
+        sessionStorage.getItem("adminAuthToken");
+
+      if (!token) {
+        // Redirect to login if token is missing
+        router.replace("/admin-login"); // change this to your login route
+      }
+    }
+  }, [router]);
+
   const getStatusTag = (expiryDate) => {
     if (!expiryDate)
       return (
@@ -171,7 +184,7 @@ export default function AdminDetailsPage() {
       if (s > e) return "Expiry Date must be after Start Date.";
     }
     return null;
-    };
+  };
 
   const saveEdit = async () => {
     const errMsg = validateForm();
@@ -314,7 +327,9 @@ export default function AdminDetailsPage() {
                     {admin && getStatusTag(admin?.ExpiryDate)}
                   </div>
                   <p className="text-blue-100 mt-1">
-                    <span className="font-medium">{admin?.role || "admin"}</span>
+                    <span className="font-medium">
+                      {admin?.role || "admin"}
+                    </span>
                     {admin?.Course ? ` • ${admin.Course}` : ""}
                   </p>
                 </div>
@@ -325,7 +340,9 @@ export default function AdminDetailsPage() {
                   <IdCard className="w-4 h-4" />
                   <span className="text-sm">Admin ID</span>
                 </div>
-                <div className="text-lg font-semibold">{admin?.AdminId || adminId}</div>
+                <div className="text-lg font-semibold">
+                  {admin?.AdminId || adminId}
+                </div>
               </div>
             </div>
           </div>
@@ -360,28 +377,36 @@ export default function AdminDetailsPage() {
                       </div>
                       <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                          <div className="text-xs uppercase text-gray-500 mb-1">Email</div>
+                          <div className="text-xs uppercase text-gray-500 mb-1">
+                            Email
+                          </div>
                           <div className="flex items-center text-gray-900 font-medium">
                             <Mail className="w-4 h-4 mr-2 text-gray-400" />
                             {admin.Email || "—"}
                           </div>
                         </div>
                         <div>
-                          <div className="text-xs uppercase text-gray-500 mb-1">Mobile</div>
+                          <div className="text-xs uppercase text-gray-500 mb-1">
+                            Mobile
+                          </div>
                           <div className="flex items-center text-gray-900 font-medium">
                             <Phone className="w-4 h-4 mr-2 text-gray-400" />
                             {admin.mobileNumber || "—"}
                           </div>
                         </div>
                         <div>
-                          <div className="text-xs uppercase text-gray-500 mb-1">WhatsApp</div>
+                          <div className="text-xs uppercase text-gray-500 mb-1">
+                            WhatsApp
+                          </div>
                           <div className="flex items-center text-gray-900 font-medium">
                             <Phone className="w-4 h-4 mr-2 text-gray-400" />
                             {admin.whatsappNumber || "—"}
                           </div>
                         </div>
                         <div className="md:col-span-2">
-                          <div className="text-xs uppercase text-gray-500 mb-1">Address</div>
+                          <div className="text-xs uppercase text-gray-500 mb-1">
+                            Address
+                          </div>
                           <div className="flex items-start text-gray-900 font-medium">
                             <MapPin className="w-4 h-4 mr-2 mt-0.5 text-gray-400" />
                             {admin.address || "—"}
@@ -401,7 +426,9 @@ export default function AdminDetailsPage() {
                       <div className="p-6 space-y-4">
                         <div className="flex items-center justify-between">
                           <span className="text-gray-600">Role</span>
-                          <span className="font-semibold">{admin.role || "admin"}</span>
+                          <span className="font-semibold">
+                            {admin.role || "admin"}
+                          </span>
                         </div>
                         <div className="flex items-center justify-between">
                           <span className="text-gray-600">Course / Dept.</span>
@@ -412,11 +439,15 @@ export default function AdminDetailsPage() {
                         </div>
                         <div className="flex items-center justify-between">
                           <span className="text-gray-600">HOD</span>
-                          <span className="font-semibold">{admin.HodName || "—"}</span>
+                          <span className="font-semibold">
+                            {admin.HodName || "—"}
+                          </span>
                         </div>
                         <div className="flex items-center justify-between">
                           <span className="text-gray-600">Created By</span>
-                          <span className="font-semibold">{admin.created_by_admin_id || "—"}</span>
+                          <span className="font-semibold">
+                            {admin.created_by_admin_id || "—"}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -435,9 +466,13 @@ export default function AdminDetailsPage() {
                             <Calendar className="w-5 h-5 text-green-700" />
                           </div>
                           <div>
-                            <div className="text-xs text-gray-500">Start Date</div>
+                            <div className="text-xs text-gray-500">
+                              Start Date
+                            </div>
                             <div className="font-semibold text-gray-900">
-                              {admin.StartDate ? new Date(admin.StartDate).toLocaleDateString() : "—"}
+                              {admin.StartDate
+                                ? new Date(admin.StartDate).toLocaleDateString()
+                                : "—"}
                             </div>
                           </div>
                         </div>
@@ -446,9 +481,15 @@ export default function AdminDetailsPage() {
                             <Calendar className="w-5 h-5 text-red-700" />
                           </div>
                           <div>
-                            <div className="text-xs text-gray-500">Expiry Date</div>
+                            <div className="text-xs text-gray-500">
+                              Expiry Date
+                            </div>
                             <div className="font-semibold text-gray-900">
-                              {admin.ExpiryDate ? new Date(admin.ExpiryDate).toLocaleDateString() : "—"}
+                              {admin.ExpiryDate
+                                ? new Date(
+                                    admin.ExpiryDate
+                                  ).toLocaleDateString()
+                                : "—"}
                             </div>
                           </div>
                         </div>
@@ -457,7 +498,9 @@ export default function AdminDetailsPage() {
                             <Clock className="w-5 h-5 text-blue-700" />
                           </div>
                           <div>
-                            <div className="text-xs text-gray-500">Days Left</div>
+                            <div className="text-xs text-gray-500">
+                              Days Left
+                            </div>
                             <div className="font-semibold text-gray-900">
                               {admin.ExpiryDate ? `${daysLeft} days` : "—"}
                             </div>
@@ -576,7 +619,9 @@ export default function AdminDetailsPage() {
                             <option value="batchmanager">Batch Manager</option>
                             <option value="teacher">Teacher</option>
                             <option value="supporter">Supporter</option>
-                            <option value="content_manager">Content Creator</option>
+                            <option value="content_manager">
+                              Content Creator
+                            </option>
                           </select>
                         </div>
                         <div>

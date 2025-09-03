@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
 import Image from "next/image";
 import toast from "react-hot-toast";
+import { useRouter } from "next/navigation";
 import {
   UserPlus,
   Mail,
@@ -17,10 +18,13 @@ import {
   Building,
   Key,
   ArrowLeft,
+  RefreshCw,
+  Copy,
 } from "lucide-react";
 import Link from "next/link";
 
 export default function AddAdminPage() {
+  const router = useRouter()
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -38,6 +42,60 @@ export default function AddAdminPage() {
     role: "admin",
   });
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const token =
+        localStorage.getItem("adminAuthToken") ||
+        sessionStorage.getItem("adminAuthToken");
+
+      if (!token) {
+        // Redirect to login if token is missing
+        router.replace("/"); // change this to your login route
+      }
+    }
+  }, [router]);
+
+  // Generate random Admin ID
+  const generateAdminId = () => {
+    const prefix = "ADM";
+    const timestamp = Date.now().toString().slice(-6);
+    const random = Math.random().toString(36).substring(2, 5).toUpperCase();
+    return `${prefix}${timestamp}${random}`;
+  };
+
+  // Generate random password
+  const generateRandomPassword = () => {
+    const length = 12;
+    const charset =
+      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+    let password = "";
+
+    // Ensure at least one of each type
+    password += "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[Math.floor(Math.random() * 26)]; // uppercase
+    password += "abcdefghijklmnopqrstuvwxyz"[Math.floor(Math.random() * 26)]; // lowercase
+    password += "0123456789"[Math.floor(Math.random() * 10)]; // number
+    password += "!@#$%^&*"[Math.floor(Math.random() * 8)]; // special char
+
+    // Fill remaining length
+    for (let i = password.length; i < length; i++) {
+      password += charset.charAt(Math.floor(Math.random() * charset.length));
+    }
+
+    // Shuffle the password
+    return password
+      .split("")
+      .sort(() => Math.random() - 0.5)
+      .join("");
+  };
+
+  // Auto-generate Admin ID on component mount
+  useEffect(() => {
+    setFormData((prev) => ({
+      ...prev,
+      AdminId: generateAdminId(),
+    }));
+  }, []);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     // guard to keep only digits for phone fields (UI-level)
@@ -49,7 +107,39 @@ export default function AddAdminPage() {
     }
   };
 
-  const sendEmailToAdmin = async (email, adminId, password, startDate, expiryDate) => {
+  const handleGeneratePassword = () => {
+    const newPassword = generateRandomPassword();
+    setFormData((prev) => ({
+      ...prev,
+      PassKey: newPassword,
+    }));
+    toast.success("New password generated!", { duration: 2000 });
+  };
+
+  const handleCopyPassword = async () => {
+    try {
+      await navigator.clipboard.writeText(formData.PassKey);
+      toast.success("Password copied to clipboard!", { duration: 2000 });
+    } catch (err) {
+      toast.error("Failed to copy password");
+    }
+  };
+
+  const handleRegenerateAdminId = () => {
+    setFormData((prev) => ({
+      ...prev,
+      AdminId: generateAdminId(),
+    }));
+    toast.success("New Admin ID generated!", { duration: 2000 });
+  };
+
+  const sendEmailToAdmin = async (
+    email,
+    adminId,
+    password,
+    startDate,
+    expiryDate
+  ) => {
     try {
       const res = await axios.post(
         `${process.env.NEXT_PUBLIC_API_BASE_URL}/email`,
@@ -87,7 +177,7 @@ export default function AddAdminPage() {
       };
 
       await axios.post(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/superadmin/add-admin`,
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/superadmin/createadmin`,
         payload
       );
 
@@ -99,8 +189,9 @@ export default function AddAdminPage() {
         formData.ExpiryDate
       );
 
+      // Reset form with new auto-generated Admin ID
       setFormData({
-        AdminId: "",
+        AdminId: generateAdminId(),
         PassKey: "",
         name: "",
         Course: "",
@@ -114,9 +205,13 @@ export default function AddAdminPage() {
         role: "admin",
       });
 
-      toast.success("Admin added successfully! Email sent 📧", { duration: 5000 });
+      toast.success("Admin added successfully! Email sent 📧", {
+        duration: 5000,
+      });
     } catch (err) {
-      toast.error(err.response?.data?.message || "Something went wrong.", { duration: 5000 });
+      toast.error(err.response?.data?.message || "Something went wrong.", {
+        duration: 5000,
+      });
     } finally {
       setLoading(false);
     }
@@ -134,7 +229,9 @@ export default function AddAdminPage() {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-gray-900">Add Admin</h1>
-                <p className="text-sm text-gray-500">Create a new admin account</p>
+                <p className="text-sm text-gray-500">
+                  Create a new admin account
+                </p>
               </div>
             </div>
 
@@ -171,7 +268,9 @@ export default function AddAdminPage() {
                   <UserPlus className="w-8 h-8 mr-3" />
                   Create New Admin
                 </h2>
-                <p className="text-blue-100 mt-2 text-lg">Fill in the details to create a new admin account</p>
+                <p className="text-blue-100 mt-2 text-lg">
+                  Fill in the details to create a new admin account
+                </p>
               </div>
               <div className="hidden sm:block p-4 bg-white/10 rounded-2xl">
                 <Shield className="w-12 h-12 text-white/80" />
@@ -190,51 +289,90 @@ export default function AddAdminPage() {
                     </div>
                     Basic Information
                   </h3>
-                  <p className="text-gray-600 mt-2">Essential details for the admin account</p>
+                  <p className="text-gray-600 mt-2">
+                    Essential details for the admin account
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  {/* Admin ID */}
-                  <div className="sm:col-span-2">
+                  {/* Auto-generated Admin ID */}
+                  {/* <div className="sm:col-span-2">
                     <label className="block text-sm font-semibold text-gray-700 mb-3">
                       <Shield className="w-4 h-4 inline mr-2 text-blue-600" />
-                      Admin ID
+                      Admin ID (Auto-Generated)
                     </label>
-                    <input
-                      type="text"
-                      name="AdminId"
-                      value={formData.AdminId}
-                      onChange={handleChange}
-                      required
-                      className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50/50 hover:bg-white"
-                      placeholder="Enter unique admin ID"
-                    />
-                  </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        name="AdminId"
+                        value={formData.AdminId}
+                        readOnly
+                        className="flex-1 px-4 py-4 border-2 border-gray-200 rounded-xl bg-gray-100 text-gray-700 font-mono"
+                        placeholder="Auto-generated"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleRegenerateAdminId}
+                        className="px-4 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors duration-200 flex items-center gap-2"
+                        title="Generate new Admin ID"
+                      >
+                        <RefreshCw className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">Admin ID is automatically generated. Click refresh to generate a new one.</p>
+                  </div> */}
 
-                  {/* Password */}
+                  {/* Password with Generator */}
                   <div className="sm:col-span-2">
                     <label className="block text-sm font-semibold text-gray-700 mb-3">
                       <Key className="w-4 h-4 inline mr-2 text-blue-600" />
                       Password
                     </label>
-                    <div className="relative">
-                      <input
-                        type={showPassword ? "text" : "password"}
-                        name="PassKey"
-                        value={formData.PassKey}
-                        onChange={handleChange}
-                        required
-                        className="w-full px-4 py-4 pr-12 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50/50 hover:bg-white"
-                        placeholder="Enter secure password"
-                      />
+                    <div className="flex gap-2">
+                      <div className="flex-1 relative">
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          name="PassKey"
+                          value={formData.PassKey}
+                          onChange={handleChange}
+                          required
+                          className="w-full px-4 py-4 pr-12 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50/50 hover:bg-white"
+                          placeholder="Enter password or generate one"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 p-1"
+                        >
+                          {showPassword ? (
+                            <EyeOff className="w-5 h-5" />
+                          ) : (
+                            <Eye className="w-5 h-5" />
+                          )}
+                        </button>
+                      </div>
                       <button
                         type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 p-1"
+                        onClick={handleGeneratePassword}
+                        className="px-4 py-4 bg-green-600 hover:bg-green-700 text-white rounded-xl transition-colors duration-200 flex items-center gap-2"
+                        title="Generate random password"
                       >
-                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                        <RefreshCw className="w-5 h-5" />
                       </button>
+                      {formData.PassKey && (
+                        <button
+                          type="button"
+                          onClick={handleCopyPassword}
+                          className="px-4 py-4 bg-gray-600 hover:bg-gray-700 text-white rounded-xl transition-colors duration-200"
+                          title="Copy password"
+                        >
+                          <Copy className="w-5 h-5" />
+                        </button>
+                      )}
                     </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Use the generate button to create a secure random password
+                    </p>
                   </div>
 
                   {/* Full Name */}
@@ -302,8 +440,8 @@ export default function AddAdminPage() {
                     >
                       <option value="superadmin">Super Admin</option>
                       <option value="admin">Admin</option>
-                      <option value="editor">Editor</option>
-                      <option value="viewer">Viewer</option>
+                      {/* <option value="editor">Editor</option>
+                      <option value="viewer">Viewer</option> */}
                     </select>
                   </div>
                 </div>
@@ -318,7 +456,9 @@ export default function AddAdminPage() {
                     </div>
                     Contact & Additional Information
                   </h3>
-                  <p className="text-gray-600 mt-2">Contact details and additional information</p>
+                  <p className="text-gray-600 mt-2">
+                    Contact details and additional information
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -359,7 +499,9 @@ export default function AddAdminPage() {
                       className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50/50 hover:bg-white"
                       placeholder="9876543210"
                     />
-                    <p className="text-xs text-gray-500 mt-1">Optional, 10 digits</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Optional, 10 digits
+                    </p>
                   </div>
 
                   {/* Start Date */}
