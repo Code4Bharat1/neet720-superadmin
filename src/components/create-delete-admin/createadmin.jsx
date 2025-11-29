@@ -1,3 +1,5 @@
+// createadmin.jsx
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -27,6 +29,8 @@ export default function AddAdminPage() {
   const router = useRouter()
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [logo, setLogo] = useState(null);
+
   const [formData, setFormData] = useState({
     AdminId: "",
     PassKey: "",
@@ -156,66 +160,141 @@ export default function AddAdminPage() {
     }
   };
 
+  // const handleSubmit = async (e) => {
+  //   e.preventDefault();
+  //   setLoading(true);
+
+  //   try {
+  //     const payload = {
+  //       AdminId: formData.AdminId,
+  //       PassKey: formData.PassKey,
+  //       name: formData.name,
+  //       Course: formData.Course,
+  //       Email: formData.Email,
+  //       mobileNumber: formData.mobileNumber,
+  //       whatsappNumber: formData.whatsappNumber,
+  //       StartDate: formData.StartDate,
+  //       ExpiryDate: formData.ExpiryDate,
+  //       address: formData.address,
+  //       HodName: formData.HodName,
+  //       role: formData.role || "admin",
+  //     };
+
+  //     const res = await axios.post(
+  //       `${process.env.NEXT_PUBLIC_API_BASE_URL}/superadmin/createadmin`,
+  //       payload
+  //     );
+
+  //     await sendEmailToAdmin(
+  //       formData.Email,
+  //       res.data.admin.AdminId,
+  //       formData.PassKey,
+  //       formData.StartDate,
+  //       formData.ExpiryDate
+  //     );
+
+  //     // Reset form with new auto-generated Admin ID
+  //     setFormData({
+  //       AdminId: generateAdminId(),
+  //       PassKey: "",
+  //       name: "",
+  //       Course: "",
+  //       Email: "",
+  //       mobileNumber: "",
+  //       whatsappNumber: "",
+  //       StartDate: "",
+  //       ExpiryDate: "",
+  //       address: "",
+  //       HodName: "",
+  //       role: "admin",
+  //     });
+
+  //     toast.success("Admin added successfully! Email sent 📧", {
+  //       duration: 5000,
+  //     });
+  //   } catch (err) {
+  //     toast.error(err.response?.data?.message || "Something went wrong.", {
+  //       duration: 5000,
+  //     });
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+
+
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+  e.preventDefault();
+  setLoading(true);
 
-    try {
-      const payload = {
-        AdminId: formData.AdminId,
-        PassKey: formData.PassKey,
-        name: formData.name,
-        Course: formData.Course,
-        Email: formData.Email,
-        mobileNumber: formData.mobileNumber,
-        whatsappNumber: formData.whatsappNumber,
-        StartDate: formData.StartDate,
-        ExpiryDate: formData.ExpiryDate,
-        address: formData.address,
-        HodName: formData.HodName,
-        role: formData.role || "admin",
-      };
+  try {
+    const form = new FormData();
 
-      const res = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/superadmin/createadmin`,
-        payload
-      );
+    // Append all text fields
+    form.append("AdminId", formData.AdminId);
+    form.append("PassKey", formData.PassKey);
+    form.append("name", formData.name);
+    form.append("Course", formData.Course);
+    form.append("Email", formData.Email);
+    form.append("mobileNumber", formData.mobileNumber);
+    form.append("whatsappNumber", formData.whatsappNumber);
+    form.append("StartDate", formData.StartDate);
+    form.append("ExpiryDate", formData.ExpiryDate);
+    form.append("address", formData.address);
+    form.append("HodName", formData.HodName);
+    form.append("role", formData.role || "admin");
 
-      await sendEmailToAdmin(
-        formData.Email,
-        res.data.admin.AdminId,
-        formData.PassKey,
-        formData.StartDate,
-        formData.ExpiryDate
-      );
-
-      // Reset form with new auto-generated Admin ID
-      setFormData({
-        AdminId: generateAdminId(),
-        PassKey: "",
-        name: "",
-        Course: "",
-        Email: "",
-        mobileNumber: "",
-        whatsappNumber: "",
-        StartDate: "",
-        ExpiryDate: "",
-        address: "",
-        HodName: "",
-        role: "admin",
-      });
-
-      toast.success("Admin added successfully! Email sent 📧", {
-        duration: 5000,
-      });
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Something went wrong.", {
-        duration: 5000,
-      });
-    } finally {
-      setLoading(false);
+    // ✔ Add the logo file
+    if (logo) {
+      form.append("logo", logo);
     }
-  };
+
+    // POST request (multipart/form-data)
+    const res = await axios.post(
+      `${process.env.NEXT_PUBLIC_API_BASE_URL}/superadmin/createadmin`,
+      form,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      }
+    );
+
+    await sendEmailToAdmin(
+      formData.Email,
+      res.data.admin.AdminId,
+      formData.PassKey,
+      formData.StartDate,
+      formData.ExpiryDate
+    );
+
+    // Reset form
+    setFormData({
+      AdminId: generateAdminId(),
+      PassKey: "",
+      name: "",
+      Course: "",
+      Email: "",
+      mobileNumber: "",
+      whatsappNumber: "",
+      StartDate: "",
+      ExpiryDate: "",
+      address: "",
+      HodName: "",
+      role: "admin",
+    });
+    setLogo(null);
+
+    toast.success("Admin added successfully! Email sent 📧", {
+      duration: 5000,
+    });
+  } catch (err) {
+    toast.error(err.response?.data?.message || "Something went wrong.", {
+      duration: 5000,
+    });
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
@@ -569,6 +648,26 @@ export default function AddAdminPage() {
                       placeholder="Enter HOD name"
                     />
                   </div>
+
+                  {/* Admin Logo Upload */}
+<div className="sm:col-span-2">
+  <label className="block text-sm font-semibold text-gray-700 mb-3">
+    <Image className="inline w-5 h-5 mr-2" />
+    Admin Logo
+  </label>
+
+  <input
+    type="file"
+    accept="image/*"
+    onChange={(e) => setLogo(e.target.files[0])}
+    className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl bg-gray-50/50 hover:bg-white"
+  />
+
+  {logo && (
+    <p className="text-sm text-green-600 mt-2">{logo.name} selected</p>
+  )}
+</div>
+
                 </div>
               </div>
             </div>
